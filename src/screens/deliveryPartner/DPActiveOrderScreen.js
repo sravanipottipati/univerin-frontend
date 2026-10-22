@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, ScrollView,
+  View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, ScrollView, Platform, StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -80,7 +80,14 @@ export default function DPActiveOrderScreen({ route, navigation }) {
   if (!order) return null;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ padding: 20 }}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={{
+        paddingHorizontal: 20,
+        paddingBottom: 20,
+        paddingTop: Platform.OS === 'ios' ? 70 : (StatusBar.currentHeight || 24) + 20,
+      }}
+    >
       <Text style={styles.orderNumber}>Order #{order.order_number}</Text>
 
       <View style={styles.infoCard}>

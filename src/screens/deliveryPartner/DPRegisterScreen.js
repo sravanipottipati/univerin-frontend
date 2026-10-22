@@ -6,6 +6,7 @@ import {
 import client from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function DPRegisterScreen({ navigation }) {
   const [fullName, setFullName]           = useState('');
@@ -16,6 +17,12 @@ export default function DPRegisterScreen({ navigation }) {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [resendTimer, setResendTimer]     = useState(30);
   const [canResend, setCanResend]         = useState(false);
+  const canSendOTP =
+    fullName.trim().length > 0 &&
+    /^[0-9]{10}$/.test(phone) &&
+    agreedToTerms &&
+    !loading;
+
   const otpRefs = useRef([]);
   const { loginWithTokens } = useAuth();
 
@@ -113,7 +120,8 @@ export default function DPRegisterScreen({ navigation }) {
   };
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      <KeyboardAvoidingView style={styles.keyboardContainer} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView contentContainerStyle={styles.inner} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <View style={styles.logoSection}>
           <Image source={require('../../../assets/app-logo-full.png')} style={styles.logoImage} resizeMode="contain" />
@@ -161,9 +169,9 @@ export default function DPRegisterScreen({ navigation }) {
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.primaryBtn, loading && styles.btnDisabled]}
+                style={[styles.primaryBtn, !canSendOTP && styles.btnDisabled]}
                 onPress={handleSendOTP}
-                disabled={loading}
+                disabled={!canSendOTP}
               >
                 {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>Send OTP</Text>}
               </TouchableOpacity>
@@ -213,38 +221,65 @@ export default function DPRegisterScreen({ navigation }) {
           )}
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  inner: { flexGrow: 1, padding: 24, justifyContent: 'center' },
-  logoSection: { alignItems: 'center', marginBottom: 24 },
-  logoImage: { width: 160, height: 60 },
-  card: { width: '100%' },
+  container: { flex: 1, backgroundColor: '#eff6ff' },
+  keyboardContainer: { flex: 1 },
+  inner: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 20, paddingBottom: 24, justifyContent: 'flex-start' },
+  logoSection: {
+    backgroundColor: '#fff',
+    borderRadius: 24,
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    marginBottom: 22,
+    borderWidth: 1.5,
+    borderColor: '#dbeafe',
+    shadowColor: '#1669ef',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  logoImage: { width: 260, height: 76, maxWidth: '100%' },
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 24,
+    padding: 24,
+    width: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
+  },
   title: { fontSize: 22, fontWeight: '700', color: '#111827', marginBottom: 4 },
-  subtitle: { fontSize: 14, color: '#6B7280', marginBottom: 20 },
-  label: { fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 6, marginTop: 12 },
+  subtitle: { fontSize: 14, color: '#6B7280', marginBottom: 14 },
+  label: { fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 5, marginTop: 10 },
   input: {
-    borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 10,
+    backgroundColor: '#F9FAFB', borderWidth: 1.5, borderColor: '#E5E7EB', borderRadius: 12,
     paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: '#111827',
   },
   phoneRow: {
     flexDirection: 'row', alignItems: 'center', borderWidth: 1,
-    borderColor: '#E5E7EB', borderRadius: 10, paddingHorizontal: 14,
+    backgroundColor: '#F9FAFB', borderColor: '#E5E7EB', borderRadius: 12, paddingHorizontal: 14,
   },
   phonePrefix: { fontSize: 15, color: '#6B7280', marginRight: 8 },
   phoneInput: { flex: 1, paddingVertical: 12, fontSize: 15, color: '#111827' },
-  checkboxRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: 16 },
+  checkboxRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: 12 },
   checkboxText: { flex: 1, fontSize: 13, color: '#374151', lineHeight: 18 },
   primaryBtn: {
     backgroundColor: '#1669ef', borderRadius: 12, paddingVertical: 14,
-    alignItems: 'center', marginTop: 20,
+    alignItems: 'center', marginTop: 16,
   },
   btnDisabled: { opacity: 0.6 },
   primaryBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
-  loginLink: { textAlign: 'center', color: '#1669ef', fontSize: 13, marginTop: 16, fontWeight: '600' },
+  loginLink: { textAlign: 'center', color: '#1669ef', fontSize: 13, marginTop: 12, fontWeight: '600' },
   otpRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20 },
   otpBox: {
     width: 44, height: 52, borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 10,

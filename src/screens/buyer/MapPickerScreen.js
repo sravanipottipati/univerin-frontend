@@ -158,7 +158,9 @@ export default function MapPickerScreen({ navigation, route }) {
 
       {/* Search Bar */}
       <View style={styles.searchBarWrapper}>
-        <Ionicons name="search-outline" size={18} color="#9CA3AF" />
+        <TouchableOpacity onPress={handleSearchAddress} disabled={searching}>
+          <Ionicons name="search-outline" size={22} color="#1669ef" />
+        </TouchableOpacity>
         <TextInput
           style={styles.searchBarInput}
           placeholder="Search for area, street name..."

@@ -154,7 +154,7 @@ export default function AddressScreen({ navigation, route }) {
 
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Profile')} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={22} color="#111" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>My Addresses</Text>

@@ -13,6 +13,7 @@ export default function LoginScreen({ navigation }) {
   const [loading, setLoading]     = useState(false);
   const [resendTimer, setResendTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
+  const canSendOTP = /^[0-9]{10}$/.test(phone) && !loading;
   const otpRefs = useRef([]);
   const { loginWithTokens } = useAuth();
 
@@ -141,15 +142,15 @@ export default function LoginScreen({ navigation }) {
                   placeholder="Enter 10-digit phone number"
                   placeholderTextColor="#9CA3AF"
                   value={phone}
-                  onChangeText={setPhone}
+                  onChangeText={(value) => setPhone(value.replace(/[^0-9]/g, ''))}
                   keyboardType="phone-pad"
                   maxLength={10}
                 />
               </View>
               <TouchableOpacity
-                style={[styles.button, loading && styles.buttonDisabled]}
+                style={[styles.button, !canSendOTP && styles.buttonDisabled]}
                 onPress={handleSendOTP}
-                disabled={loading}
+                disabled={!canSendOTP}
               >
                 {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Send OTP</Text>}
               </TouchableOpacity>
@@ -207,23 +208,23 @@ export default function LoginScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#eff6ff' },
-  inner: { flexGrow: 1, alignItems: 'center', padding: 24, paddingTop: 60 },
+  inner: { flexGrow: 1, alignItems: 'center', paddingHorizontal: 24, paddingTop: 65, paddingBottom: 24 },
   logoSection: {
-    backgroundColor: '#ffffff', borderRadius: 28, padding: 28,
+    backgroundColor: '#ffffff', borderRadius: 24, padding: 20,
     alignItems: 'center', justifyContent: 'center',
-    width: '100%', marginBottom: 28,
+    width: '100%', marginBottom: 22,
     borderWidth: 1.5, borderColor: '#dbeafe',
     shadowColor: '#1669ef', shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1, shadowRadius: 12, elevation: 4,
   },
-  logoImage: { width: 280, height: 90 },
+  logoImage: { width: 260, height: 76, maxWidth: '100%' },
   card: {
     backgroundColor: '#fff', borderRadius: 24, padding: 24, width: '100%',
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06, shadowRadius: 12, elevation: 3,
   },
   title:    { fontSize: 22, fontWeight: '700', color: '#111', marginBottom: 4 },
-  subtitle: { fontSize: 14, color: '#888', marginBottom: 22, lineHeight: 20 },
+  subtitle: { fontSize: 14, color: '#6B7280', marginBottom: 20, lineHeight: 20 },
   label:    { fontSize: 13, fontWeight: '600', color: '#444', marginBottom: 8 },
   inputWrapper: {
     flexDirection: 'row', alignItems: 'center',

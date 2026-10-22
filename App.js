@@ -93,6 +93,7 @@ const Stack = createNativeStackNavigator();
 
 function AppNavigator() {
   const { user, loading } = useAuth();
+  console.log('[NAV] Current user:', user?.user_type ?? 'GUEST');
 
   useEffect(() => {
     if (!user) return;

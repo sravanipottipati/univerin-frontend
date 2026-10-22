@@ -144,6 +144,17 @@ export default function OrderDetailScreen({ navigation, route }) {
           </View>
           <Text style={styles.statusAmount}>₹{total % 1 === 0 ? total.toFixed(0) : total.toFixed(1)}</Text>
         </View>
+        {order.delivery_otp && ['picked_up', 'arrived_at_buyer'].includes(order.dp_status) && (
+          <View style={styles.deliveryOtpCard}>
+            <Ionicons name="shield-checkmark-outline" size={28} color="#1669ef" />
+            <Text style={styles.deliveryOtpTitle}>Your Delivery OTP</Text>
+            <Text style={styles.deliveryOtpCode}>{order.delivery_otp}</Text>
+            <Text style={styles.deliveryOtpHint}>
+              Share this 6-digit code with your delivery partner only when receiving your order.
+            </Text>
+          </View>
+        )}
+
         {isDelivered && (
           <View style={{ paddingHorizontal: 16, paddingVertical: 8, alignItems: 'center' }}>
             <Text style={{ fontSize: 13, color: '#16A34A', fontWeight: '600' }}>🎉 Thank you for shopping with Univerin!</Text>
@@ -321,6 +332,35 @@ const styles = StyleSheet.create({
   backBtn:     { width: 36, height: 36, justifyContent: 'center' },
   headerTitle: { fontSize: 18, fontWeight: '700', color: '#111', flex: 1, textAlign: 'center' },
   headerSub:   { fontSize: 11, color: '#888', marginTop: 2 },
+  deliveryOtpCard: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 20,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    borderRadius: 16,
+    alignItems: 'center',
+  },
+  deliveryOtpTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#1E40AF',
+    marginTop: 8,
+  },
+  deliveryOtpCode: {
+    fontSize: 34,
+    fontWeight: '800',
+    color: '#111827',
+    letterSpacing: 8,
+    marginVertical: 12,
+  },
+  deliveryOtpHint: {
+    fontSize: 12,
+    color: '#475569',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
   statusBanner: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     margin: 16, borderRadius: 16, padding: 16, borderWidth: 1,

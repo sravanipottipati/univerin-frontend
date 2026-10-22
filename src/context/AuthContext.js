@@ -59,10 +59,18 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = async () => {
-    await AsyncStorage.removeItem('access_token');
-    await AsyncStorage.removeItem('refresh_token');
-    await AsyncStorage.removeItem('user');
-    setUser(null);
+    console.log('[AUTH] Logout started');
+    try {
+      await AsyncStorage.removeItem('access_token');
+      await AsyncStorage.removeItem('refresh_token');
+      await AsyncStorage.removeItem('user');
+      console.log('[AUTH] Storage cleared');
+      setUser(null);
+      console.log('[AUTH] User state set to null');
+    } catch (error) {
+      console.error('[AUTH] Logout failed:', error);
+      throw error;
+    }
   };
 
   return (

@@ -4,6 +4,7 @@ import {
   ActivityIndicator, Alert, RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import client from '../../api/client';
@@ -76,15 +77,37 @@ export default function DPOrderOfferScreen({ navigation }) {
 
   if (loading) {
     return (
-      <View style={styles.centered}>
+      <SafeAreaView style={styles.centered}>
         <ActivityIndicator size="large" color="#1669ef" />
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Available Orders</Text>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.canGoBack()
+            ? navigation.goBack()
+            : navigation.navigate('DPHome')}
+          accessibilityLabel="Back to Dashboard"
+        >
+          <Ionicons name="arrow-back" size={23} color="#1669ef" />
+        </TouchableOpacity>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.title}>Available Orders</Text>
+          <Text style={styles.subtitle}>Delivery opportunities near you</Text>
+        </View>
+        <TouchableOpacity
+          style={styles.refreshIcon}
+          onPress={handleRefresh}
+          disabled={refreshing}
+          accessibilityLabel="Refresh orders"
+        >
+          <Ionicons name="refresh" size={21} color="#1669ef" />
+        </TouchableOpacity>
+      </View>
       <FlatList
         data={orders}
         keyExtractor={(item) => item.id}
@@ -92,9 +115,23 @@ export default function DPOrderOfferScreen({ navigation }) {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Ionicons name="cube-outline" size={48} color="#D1D5DB" />
-            <Text style={styles.emptyText}>No orders available right now</Text>
-            <Text style={styles.emptySubtext}>Pull down to refresh</Text>
+            <View style={styles.emptyIconCircle}>
+              <Ionicons name="cube-outline" size={42} color="#1669ef" />
+            </View>
+            <Text style={styles.emptyText}>No orders available yet</Text>
+            <Text style={styles.emptySubtext}>
+              New delivery requests will appear here when available.
+            </Text>
+            <TouchableOpacity
+              style={styles.refreshButton}
+              onPress={handleRefresh}
+              disabled={refreshing}
+            >
+              <Ionicons name="refresh" size={18} color="#1669ef" />
+              <Text style={styles.refreshButtonText}>
+                {refreshing ? 'Refreshing...' : 'Refresh Orders'}
+              </Text>
+            </TouchableOpacity>
           </View>
         }
         renderItem={({ item }) => (
@@ -126,17 +163,60 @@ export default function DPOrderOfferScreen({ navigation }) {
           </View>
         )}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F7F7F5' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  title: { fontSize: 20, fontWeight: '700', color: '#111827', padding: 16, paddingBottom: 0 },
-  emptyState: { alignItems: 'center', justifyContent: 'center', paddingTop: 80, gap: 8 },
-  emptyText: { fontSize: 15, color: '#6B7280', fontWeight: '600' },
-  emptySubtext: { fontSize: 13, color: '#9CA3AF' },
+  header: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 14,
+    backgroundColor: '#FFFFFF', gap: 12,
+    borderBottomWidth: 1, borderBottomColor: '#E5E7EB',
+  },
+  backButton: {
+    width: 40, height: 40, borderRadius: 12,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  title: { fontSize: 19, fontWeight: '700', color: '#111827' },
+  subtitle: { fontSize: 12, color: '#6B7280', marginTop: 3 },
+  refreshIcon: {
+    width: 40, height: 40, borderRadius: 12,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  emptyState: {
+    alignItems: 'center', justifyContent: 'center',
+    marginTop: 70, marginHorizontal: 4,
+    paddingHorizontal: 22, paddingVertical: 35,
+    borderRadius: 18, backgroundColor: '#FFFFFF',
+    borderWidth: 1, borderColor: '#E5E7EB', gap: 12,
+  },
+  emptyIconCircle: {
+    width: 88, height: 88, borderRadius: 44,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 6,
+  },
+  emptyText: {
+    fontSize: 17, color: '#111827',
+    fontWeight: '700', textAlign: 'center',
+  },
+  emptySubtext: {
+    fontSize: 13, color: '#6B7280',
+    textAlign: 'center', lineHeight: 20,
+  },
+  refreshButton: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: '#EFF6FF', borderRadius: 10,
+    paddingHorizontal: 18, paddingVertical: 12, marginTop: 8,
+  },
+  refreshButtonText: {
+    color: '#1669ef', fontWeight: '700', fontSize: 14,
+  },
   orderCard: {
     backgroundColor: '#fff', borderRadius: 14, padding: 16, marginBottom: 12,
     borderWidth: 1, borderColor: '#E5E7EB',

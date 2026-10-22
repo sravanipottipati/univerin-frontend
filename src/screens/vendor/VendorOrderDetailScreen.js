@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View, Text, TouchableOpacity, StyleSheet,
   ScrollView, ActivityIndicator, Linking, Alert, Modal, TextInput,
@@ -23,8 +24,6 @@ const STATUS_INFO = {
 const NEXT_ACTION = {
   placed:     { label: 'Accept Order',       next: 'accepted',   color: '#16A34A', icon: 'checkmark-circle' },
   accepted:   { label: 'Start Preparing',    next: 'preparing',  color: '#1669ef', icon: 'restaurant' },
-  preparing:  { label: 'Mark as Out for Delivery', next: 'dispatched', color: '#8B5CF6', icon: 'bicycle' },
-  dispatched: { label: 'Mark as Delivered',  next: 'delivered',  color: '#16A34A', icon: 'home' },
 };
 
 export default function VendorOrderDetailScreen({ navigation, route }) {
@@ -68,7 +67,11 @@ export default function VendorOrderDetailScreen({ navigation, route }) {
     }
   };
 
-  useEffect(() => { fetchOrder(); }, [orderId]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchOrder();
+    }, [orderId])
+  );
 
   const handleUpdateStatus = async (newStatus) => {
     Alert.alert('Confirm', `Mark order as "${STATUS_INFO[newStatus]?.label}"?`, [
@@ -84,6 +87,50 @@ export default function VendorOrderDetailScreen({ navigation, route }) {
         } finally { setUpdating(false); }
       }}
     ]);
+  };
+
+  const handleRequestDelivery = async () => {
+    if (updating) return;
+
+    setUpdating(true);
+    try {
+      const latest = await client.get(`/orders/${orderId}/`);
+      const current = latest.data;
+      setOrder(current);
+
+      const canRequest =
+        current.status === 'preparing' &&
+        !current.delivery_partner &&
+        !current.delivery_partner_id &&
+        ['unassigned', 'offered'].includes(current.dp_status);
+
+      if (!canRequest) {
+        Alert.alert(
+          'Delivery Status Updated',
+          'This order is no longer eligible for delivery assignment.'
+        );
+        return;
+      }
+
+      const response = await client.post(
+        `/orders/${orderId}/request-delivery/`
+      );
+
+      await fetchOrder();
+
+      Alert.alert(
+        'Delivery Partner',
+        response.data?.message || 'Delivery request completed.'
+      );
+    } catch (error) {
+      Alert.alert(
+        'Delivery Request Failed',
+        error.response?.data?.error ||
+          'Unable to find a Delivery Partner. Please try again.'
+      );
+    } finally {
+      setUpdating(false);
+    }
   };
 
   const handleReject = async () => {
@@ -212,6 +259,29 @@ ${order.delivery_address}
             <TouchableOpacity style={[styles.progressBtn, { backgroundColor: nextAction.color }]} onPress={() => handleUpdateStatus(nextAction.next)} disabled={updating}>
               {updating ? <ActivityIndicator color="#fff" /> : (
                 <><Ionicons name={nextAction.icon} size={20} color="#fff" /><Text style={styles.progressBtnText}>{nextAction.label}</Text></>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {order.status === 'preparing' &&
+          !order.delivery_partner &&
+          !order.delivery_partner_id &&
+          ['unassigned', 'offered'].includes(order.dp_status) && (
+          <View style={styles.progressCard}>
+            <Text style={styles.progressTitle}>Delivery Assignment</Text>
+            <TouchableOpacity
+              style={[styles.progressBtn, { backgroundColor: '#16A34A' }]}
+              onPress={handleRequestDelivery}
+              disabled={updating}
+            >
+              {updating ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="bicycle-outline" size={20} color="#fff" />
+                  <Text style={styles.progressBtnText}>Find Delivery Partner</Text>
+                </>
               )}
             </TouchableOpacity>
           </View>

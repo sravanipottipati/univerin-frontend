@@ -46,6 +46,9 @@ export default function VendorRegisterScreen({ navigation }) {
   const [vendorOtp, setVendorOtp] = useState(['','','','','','']);
 
   const [category,        setCategory]        = useState('restaurant');
+  const [categoryConfirmed, setCategoryConfirmed] = useState(false);
+  const [deliveryConfirmed, setDeliveryConfirmed] = useState(false);
+  const [timingsConfirmed, setTimingsConfirmed] = useState(false);
   // MOV auto-set based on category
   const [deliveryType,    setDeliveryType]    = useState('delivery');
   const [minOrder,        setMinOrder]        = useState('499');
@@ -114,8 +117,56 @@ export default function VendorRegisterScreen({ navigation }) {
     }
   };
 
+  // Form readiness for the five registration steps
+  const basicInfoValid =
+    shopName.trim().length > 0 &&
+    ownerName.trim().length > 0 &&
+    /^[0-9]{10}$/.test(phone) &&
+    town.trim().length > 0 &&
+    state.trim().length > 0 &&
+    vendorLat !== null &&
+    vendorLng !== null &&
+    (!gstRegistered || /^[0-9A-Z]{15}$/.test(gstin.trim().toUpperCase())) &&
+    (pan.trim() === '' || /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan.trim().toUpperCase())) &&
+    /^[0-9]{14}$/.test(fssai) &&
+    Boolean(fssaiCert);
+
+  const shopDetailsValid =
+    categoryConfirmed &&
+    deliveryConfirmed &&
+    CATEGORIES.some(item => item.id === category) &&
+    ['delivery', 'pickup', 'both'].includes(deliveryType);
+
+  const timingsValid =
+    timingsConfirmed &&
+    openTime.trim().length > 0 &&
+    closeTime.trim().length > 0 &&
+    WEEKLY_OFF.includes(weeklyOff);
+
+  const bankDetailsValid =
+    accountName.trim().length > 0 &&
+    bankName.trim().length > 0 &&
+    /^[0-9]{9,18}$/.test(accountNo.trim()) &&
+    /^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc.trim().toUpperCase());
+
+  const canGoNext =
+    !loading &&
+    !gpsLoading &&
+    (step === 1 ? basicInfoValid :
+     step === 2 ? shopDetailsValid :
+     step === 3 ? bankDetailsValid :
+     step === 4 ? timingsValid : false);
+
+  const canSubmit =
+    !loading &&
+    basicInfoValid &&
+    shopDetailsValid &&
+    timingsValid &&
+    agreedToTerms;
+
   // ── Validation on Next ──
   const goNext = () => {
+    if (!canGoNext) return;
     if (step === 1) {
       if (!shopName.trim())  return Alert.alert('Error', 'Please enter shop name');
       if (!ownerName.trim()) return Alert.alert('Error', 'Please enter owner name');
@@ -147,6 +198,7 @@ export default function VendorRegisterScreen({ navigation }) {
   };
 
   const handleSubmit = async () => {
+    if (!canSubmit) return;
     if (!shopName.trim()) return Alert.alert('Error', 'Shop name is required');
     if (!town.trim())     return Alert.alert('Error', 'Town is required');
     if (!fssai.trim())    return Alert.alert('FSSAI Number Required', 'Please enter your FSSAI license number to register your shop. This is mandatory for selling food/grocery items.');
@@ -380,6 +432,7 @@ export default function VendorRegisterScreen({ navigation }) {
             style={[styles.categoryCard, category === cat.id && styles.categoryCardActive]}
             onPress={() => {
               setCategory(cat.id);
+              setCategoryConfirmed(true);
               setMinOrder(String(cat.mov));
             }}>
             <View style={[styles.categoryIconBox, { backgroundColor: category === cat.id ? cat.color : cat.bg }]}>
@@ -403,7 +456,7 @@ export default function VendorRegisterScreen({ navigation }) {
         {[['delivery','Shop Delivers'],['pickup','Self Pickup'],['both','Both']].map(([val, label]) => (
           <TouchableOpacity key={val}
             style={[styles.toggleBtn, deliveryType === val && styles.toggleBtnActive]}
-            onPress={() => setDeliveryType(val)}>
+            onPress={() => { setDeliveryType(val); setDeliveryConfirmed(true); }}>
             <Text style={[styles.toggleBtnText, deliveryType === val && styles.toggleBtnTextActive]}>
               {label}
             </Text>
@@ -495,7 +548,7 @@ export default function VendorRegisterScreen({ navigation }) {
         {WEEKLY_OFF.map(day => (
           <TouchableOpacity key={day}
             style={[styles.dayBtn, weeklyOff === day && styles.dayBtnActive]}
-            onPress={() => setWeeklyOff(day)}>
+            onPress={() => { setWeeklyOff(day); setTimingsConfirmed(true); }}>
             <Text style={[styles.dayBtnText, weeklyOff === day && styles.dayBtnTextActive]}>
               {day}
             </Text>
@@ -590,9 +643,25 @@ export default function VendorRegisterScreen({ navigation }) {
 
       <View style={styles.footer}>
         {step < 5 ? (
-          <TouchableOpacity style={styles.nextBtn} onPress={goNext}>
-            <Text style={styles.nextBtnText}>Next →</Text>
-          </TouchableOpacity>
+          <View>
+            <TouchableOpacity
+              style={[styles.nextBtn, !canGoNext && styles.nextBtnDisabled]}
+              onPress={goNext}
+              disabled={!canGoNext}
+            >
+              <Text style={styles.nextBtnText}>Next →</Text>
+            </TouchableOpacity>
+
+            {step === 3 && (
+              <TouchableOpacity
+                style={styles.skipBtn}
+                onPress={() => setStep(4)}
+                disabled={loading}
+              >
+                <Text style={styles.skipBtnText}>Skip for Now</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         ) : (
           <>
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 12, paddingHorizontal: 4 }}>
@@ -607,8 +676,8 @@ export default function VendorRegisterScreen({ navigation }) {
             </Text>
           </View>
           <TouchableOpacity
-            style={[styles.submitBtn, (loading || !agreedToTerms) && styles.submitBtnDisabled]}
-            onPress={handleSubmit} disabled={loading || !agreedToTerms}>
+            style={[styles.submitBtn, !canSubmit && styles.submitBtnDisabled]}
+            onPress={handleSubmit} disabled={!canSubmit}>
             {loading
               ? <ActivityIndicator color="#fff" />
               : <Text style={styles.nextBtnText}>Join as Seller 🎉</Text>
@@ -788,6 +857,9 @@ const styles = StyleSheet.create({
   },
   nextBtn:           { backgroundColor: '#1669ef', padding: 16, borderRadius: 14, alignItems: 'center' },
   submitBtn:         { backgroundColor: '#16A34A', padding: 16, borderRadius: 14, alignItems: 'center' },
-  submitBtnDisabled: { backgroundColor: '#bfdbfe' },
+  nextBtnDisabled: { backgroundColor: '#93c5fd' },
+  submitBtnDisabled: { backgroundColor: '#93c5fd' },
   nextBtnText:       { color: '#fff', fontSize: 16, fontWeight: '700' },
+  skipBtn: { paddingVertical: 12, alignItems: 'center' },
+  skipBtnText: { color: '#1669ef', fontSize: 14, fontWeight: '600' },
 });

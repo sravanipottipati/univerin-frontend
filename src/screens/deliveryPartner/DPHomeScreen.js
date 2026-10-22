@@ -108,7 +108,15 @@ export default function DPHomeScreen({ navigation }) {
         text: 'Logout',
         style: 'destructive',
         onPress: async () => {
-          await stopLocationTracking();
+          try {
+            await stopLocationTracking();
+          } catch (error) {
+            console.warn('Could not stop location tracking during logout:', error);
+          }
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'Login' }],
+          });
           await logout();
         },
       },
