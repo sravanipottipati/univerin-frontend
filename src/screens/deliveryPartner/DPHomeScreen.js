@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Switch } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Switch, AppState } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
@@ -15,6 +15,7 @@ export default function DPHomeScreen({ navigation }) {
   const [toggling, setToggling] = useState(false);
 
   const [activeOrder, setActiveOrder] = useState(null);
+  const [availableOrderCount, setAvailableOrderCount] = useState(0);
 
   useEffect(() => {
     (async () => {
@@ -37,6 +38,96 @@ export default function DPHomeScreen({ navigation }) {
         }
       })();
     }, [])
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      let fetching = false;
+
+      const checkAvailableOrders = async () => {
+        if (!active || fetching || !isOnline || AppState.currentState !== 'active') return;
+
+        fetching = true;
+        try {
+          const res = await client.get('/dp/orders/available/');
+          if (active) {
+            setAvailableOrderCount(Array.isArray(res.data) ? res.data.length : 0);
+          }
+        } catch (error) {
+          console.warn('Could not refresh DP offers:', error.message);
+        } finally {
+          fetching = false;
+        }
+      };
+
+      if (isOnline) checkAvailableOrders();
+      else setAvailableOrderCount(0);
+
+      const interval = setInterval(checkAvailableOrders, 10000);
+      const subscription = AppState.addEventListener('change', state => {
+        if (state === 'active') checkAvailableOrders();
+      });
+
+      return () => {
+        active = false;
+        clearInterval(interval);
+        subscription.remove();
+      };
+    }, [isOnline])
+  );
+
+  // DP foreground GPS heartbeat: keep stationary online partners eligible.
+  useFocusEffect(
+    useCallback(() => {
+      if (!isOnline) return undefined;
+
+      let active = true;
+      let updating = false;
+
+      const refreshLocation = async () => {
+        if (!active || updating || AppState.currentState !== 'active') return;
+
+        updating = true;
+        try {
+          const permission = await Location.getForegroundPermissionsAsync();
+          if (!active || permission.status !== 'granted') return;
+
+          const cachedPosition = await Location.getLastKnownPositionAsync({
+            maxAge: 60000,
+            requiredAccuracy: 100,
+          });
+
+          const position = cachedPosition || await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+
+          if (!active || AppState.currentState !== 'active') return;
+
+          await client.post('/dp/location/update/', {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          });
+        } catch (error) {
+          console.warn('DP foreground GPS heartbeat failed:', error.message);
+        } finally {
+          updating = false;
+        }
+      };
+
+      refreshLocation();
+
+      const interval = setInterval(refreshLocation, 90000);
+      const subscription = AppState.addEventListener('change', state => {
+        if (state === 'active') refreshLocation();
+      });
+
+      return () => {
+        active = false;
+        clearInterval(interval);
+        subscription.remove();
+      };
+    }, [isOnline])
   );
 
   const startLocationTracking = async () => {
@@ -83,18 +174,50 @@ export default function DPHomeScreen({ navigation }) {
           setToggling(false);
           return; // permission denied, don't flip the switch or call backend
         }
-      } else {
-        await stopLocationTracking();
       }
 
       const token = await AsyncStorage.getItem('access_token');
+
+      // Send a fresh GPS position before going online.
+      if (value) {
+        const position = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+
+        await client.post(
+          '/dp/location/update/',
+          {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+      }
+
       await client.post(
         '/dp/duty/toggle/',
         { is_online: value },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setIsOnline(value);
+
+      // Stop tracking only after the backend confirms Offline.
+      if (!value) {
+        try {
+          await stopLocationTracking();
+        } catch (stopError) {
+          console.warn('Offline confirmed, but GPS tracking could not stop:', stopError.message);
+        }
+      }
     } catch (e) {
+      if (value) {
+        try {
+          await stopLocationTracking();
+        } catch (stopError) {
+          console.warn('Could not stop GPS tracking:', stopError.message);
+        }
+      }
+      console.warn('Delivery partner status update failed:', e.message);
       Alert.alert('Error', 'Failed to update status. Please try again.');
     } finally {
       setToggling(false);
@@ -178,7 +301,11 @@ export default function DPHomeScreen({ navigation }) {
             style={styles.checkOrdersBtn}
             onPress={() => navigation.navigate('DPOrderOffer')}
           >
-            <Text style={styles.checkOrdersText}>Check for Orders</Text>
+            <Text style={styles.checkOrdersText}>
+              {availableOrderCount > 0
+                ? `Incoming Orders (${availableOrderCount})`
+                : 'Check for Orders'}
+            </Text>
           </TouchableOpacity>
         )}
       </View>
