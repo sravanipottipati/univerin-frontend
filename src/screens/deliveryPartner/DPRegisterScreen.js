@@ -23,7 +23,7 @@ export default function DPRegisterScreen({ navigation }) {
     agreedToTerms &&
     !loading;
 
-  const otpRefs = useRef([]);
+  const otpInputRef = useRef(null);
   const { loginWithTokens } = useAuth();
 
   const startTimer = () => {
@@ -50,7 +50,7 @@ export default function DPRegisterScreen({ navigation }) {
       });
       setStep(2);
       startTimer();
-      setTimeout(() => otpRefs.current[0]?.focus(), 300);
+      setTimeout(() => otpInputRef.current?.focus(), 300);
     } catch (e) {
       const msg = e.response?.data?.error || 'Failed to send OTP. Please try again.';
       Alert.alert('Error', msg);
@@ -59,24 +59,9 @@ export default function DPRegisterScreen({ navigation }) {
     }
   };
 
-  const handleOtpChange = (val, index) => {
-    const digitsOnly = val.replace(/[^0-9]/g, '');
-    if (digitsOnly.length > 1) {
-      const newOtp = [...otp];
-      for (let i = 0; i < 6; i++) newOtp[i] = digitsOnly[i] || '';
-      setOtp(newOtp);
-      otpRefs.current[Math.min(digitsOnly.length - 1, 5)]?.focus();
-      return;
-    }
-    const newOtp = [...otp];
-    newOtp[index] = digitsOnly;
-    setOtp(newOtp);
-    if (digitsOnly && index < 5) otpRefs.current[index + 1]?.focus();
-  };
-
-  const handleOtpKeyPress = (e, index) => {
-    if (e.nativeEvent.key === 'Backspace' && !otp[index] && index > 0)
-      otpRefs.current[index - 1]?.focus();
+  const handleOtpChange = (value) => {
+    const digits = value.replace(/[^0-9]/g, '').slice(0, 6);
+    setOtp(Array.from({ length: 6 }, (_, index) => digits[index] || ''));
   };
 
   const handleVerifyAndRegister = async () => {
@@ -111,7 +96,7 @@ export default function DPRegisterScreen({ navigation }) {
       });
       setOtp(['', '', '', '', '', '']);
       startTimer();
-      setTimeout(() => otpRefs.current[0]?.focus(), 300);
+      setTimeout(() => otpInputRef.current?.focus(), 300);
     } catch (e) {
       Alert.alert('Error', 'Failed to resend OTP. Please try again.');
     } finally {
@@ -187,17 +172,33 @@ export default function DPRegisterScreen({ navigation }) {
 
               <View style={styles.otpRow}>
                 {otp.map((digit, index) => (
-                  <TextInput
+                  <View
                     key={index}
-                    ref={(ref) => (otpRefs.current[index] = ref)}
-                    style={styles.otpBox}
-                    keyboardType="number-pad"
-                    maxLength={1}
-                    value={digit}
-                    onChangeText={(val) => handleOtpChange(val, index)}
-                    onKeyPress={(e) => handleOtpKeyPress(e, index)}
-                  />
+                    style={[styles.otpBox, {
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }]}
+                  >
+                    <Text style={{
+                      fontSize: 22,
+                      color: '#111827',
+                      fontWeight: '600'
+                    }}>
+                      {digit}
+                    </Text>
+                  </View>
                 ))}
+                <TextInput
+                  ref={otpInputRef}
+                  style={styles.otpHiddenInput}
+                  keyboardType="number-pad"
+                  autoComplete="sms-otp"
+                  textContentType="oneTimeCode"
+                  maxLength={6}
+                  value={otp.join('')}
+                  onChangeText={handleOtpChange}
+                  caretHidden
+                />
               </View>
 
               <TouchableOpacity
@@ -227,6 +228,11 @@ export default function DPRegisterScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
+  otpHiddenInput: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.01,
+    color: 'transparent',
+  },
   container: { flex: 1, backgroundColor: '#eff6ff' },
   keyboardContainer: { flex: 1 },
   inner: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 20, paddingBottom: 24, justifyContent: 'flex-start' },

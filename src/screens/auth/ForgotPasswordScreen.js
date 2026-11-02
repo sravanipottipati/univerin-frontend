@@ -17,7 +17,7 @@ export default function ForgotPasswordScreen({ navigation }) {
   const [loading, setLoading]                 = useState(false);
   const [resendTimer, setResendTimer]         = useState(30);
   const [canResend, setCanResend]             = useState(false);
-  const otpRefs = useRef([]);
+  const otpInputRef = useRef(null);
 
   // Resend timer
   useEffect(() => {
@@ -46,41 +46,16 @@ export default function ForgotPasswordScreen({ navigation }) {
     try {
       await client.post('/users/forgot-password/', { phone_number: phone });
       setStep(2);
-      setTimeout(() => otpRefs.current[0]?.focus(), 300);
+      setTimeout(() => otpInputRef.current?.focus(), 300);
     } catch (e) {
       const msg = e.response?.data?.error || 'Phone number not found. Please check and try again.';
       alert(msg);
     } finally { setLoading(false); }
   };
 
-  const handleOtpChange = (val, index) => {
-    // Handle SMS autofill / paste that may insert the full code into one box
-    const digitsOnly = val.replace(/[^0-9]/g, '');
-    if (digitsOnly.length > 1) {
-      const newOtp = [...otp];
-      for (let i = 0; i < 6; i++) {
-        newOtp[i] = digitsOnly[i] || '';
-      }
-      setOtp(newOtp);
-      const lastFilledIndex = Math.min(digitsOnly.length, 6) - 1;
-      otpRefs.current[Math.min(lastFilledIndex, 5)]?.focus();
-      if (digitsOnly.length >= 6) {
-        otpRefs.current[5]?.blur();
-      }
-      return;
-    }
-    const newOtp = [...otp];
-    newOtp[index] = digitsOnly;
-    setOtp(newOtp);
-    if (digitsOnly && index < 5) {
-      otpRefs.current[index + 1]?.focus();
-    }
-  };
-
-  const handleOtpKeyPress = (e, index) => {
-    if (e.nativeEvent.key === 'Backspace' && !otp[index] && index > 0) {
-      otpRefs.current[index - 1]?.focus();
-    }
+  const handleOtpChange = (value) => {
+    const digits = value.replace(/[^0-9]/g, '').slice(0, 6);
+    setOtp(Array.from({ length: 6 }, (_, i) => digits[i] || ''));
   };
 
   const handleResendOTP = async () => {
@@ -91,7 +66,7 @@ export default function ForgotPasswordScreen({ navigation }) {
       setOtp(['', '', '', '', '', '']);
       setResendTimer(30);
       setCanResend(false);
-      setTimeout(() => otpRefs.current[0]?.focus(), 300);
+      setTimeout(() => otpInputRef.current?.focus(), 300);
     } catch (e) {
       alert('Could not resend OTP. Please try again.');
     } finally { setLoading(false); }
@@ -99,7 +74,6 @@ export default function ForgotPasswordScreen({ navigation }) {
 
   const handleResetPassword = async () => {
     const otpCode = otp.join('');
-    console.log('OTP being sent:', otpCode, 'Phone:', phone);
     if (otpCode.length !== 6) return alert('Please enter the complete OTP');
     if (!newPassword.trim() || newPassword.length < 6) return alert('Password must be at least 6 characters');
     if (newPassword !== confirmPassword) return alert('Passwords do not match');
@@ -118,7 +92,7 @@ export default function ForgotPasswordScreen({ navigation }) {
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <ScrollView contentContainerStyle={styles.inner} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={styles.inner} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
         {/* Header */}
         <View style={styles.header}>
@@ -185,21 +159,34 @@ export default function ForgotPasswordScreen({ navigation }) {
             <Text style={styles.title}>Enter OTP</Text>
             <Text style={styles.subtitle}>We sent a 6-digit OTP to{'\n'}+91 {phone}</Text>
 
-            {/* 6 Box OTP Input */}
+            {/* Six visual OTP boxes backed by one autofill input */}
             <View style={styles.otpRow}>
               {otp.map((digit, index) => (
-                <TextInput
+                <View
                   key={index}
-                  ref={ref => otpRefs.current[index] = ref}
-                  style={[styles.otpBox, digit && styles.otpBoxFilled]}
-                  value={digit}
-                  onChangeText={val => handleOtpChange(val, index)}
-                  onKeyPress={e => handleOtpKeyPress(e, index)}
-                  keyboardType="numeric"
-                  maxLength={1}
-                  textAlign="center"
-                />
+                  style={[
+                    styles.otpBox,
+                    digit && styles.otpBoxFilled,
+                    { alignItems: 'center', justifyContent: 'center' },
+                  ]}
+                  pointerEvents="none"
+                >
+                  <Text style={{ fontSize: 20, fontWeight: '700', color: '#111' }}>
+                    {digit}
+                  </Text>
+                </View>
               ))}
+              <TextInput
+                ref={otpInputRef}
+                style={styles.otpHiddenInput}
+                value={otp.join('')}
+                onChangeText={handleOtpChange}
+                keyboardType="number-pad"
+                autoComplete="sms-otp"
+                textContentType="oneTimeCode"
+                maxLength={6}
+                caretHidden
+              />
             </View>
 
             <TouchableOpacity
@@ -214,7 +201,6 @@ export default function ForgotPasswordScreen({ navigation }) {
                   alert('OTP verified successfully!');
                   setStep(3);
                 } catch (e) {
-                  console.log('OTP verify error:', e.message, '| response:', JSON.stringify(e.response?.data), '| code entered:', otpCode);
                   const backendMsg = e.response?.data?.error;
                   if (!e.response) {
                     // Network error - could be slow mobile data. Give helpful message.
@@ -302,6 +288,11 @@ export default function ForgotPasswordScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#eff6ff' },
+  otpHiddenInput: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.01,
+    color: 'transparent',
+  },
   inner:     { flexGrow: 1, alignItems: 'center', padding: 24, paddingTop: 20 },
   header:    { width: '100%', marginBottom: 16 },
   backBtn:   { padding: 4 },

@@ -21,7 +21,12 @@ client.interceptors.response.use(
   response => response,
   async error => {
     const config = error.config;
-    if (!error.response && !config._retry) {
+    if (
+      config &&
+      !error.response &&
+      !config._retry &&
+      ['get', 'head', 'options'].includes((config.method || '').toLowerCase())
+    ) {
       config._retry = true;
       console.log('Network error - retrying request once after 3s delay...');
       await new Promise(resolve => setTimeout(resolve, 3000));

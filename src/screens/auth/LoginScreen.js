@@ -14,7 +14,7 @@ export default function LoginScreen({ navigation }) {
   const [resendTimer, setResendTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
   const canSendOTP = /^[0-9]{10}$/.test(phone) && !loading;
-  const otpRefs = useRef([]);
+  const otpInputRef = useRef(null);
   const { loginWithTokens } = useAuth();
 
   const startTimer = () => {
@@ -36,7 +36,7 @@ export default function LoginScreen({ navigation }) {
       await client.post('/users/send-login-otp/', { phone_number: cleanPhone });
       setStep(2);
       startTimer();
-      setTimeout(() => otpRefs.current[0]?.focus(), 300);
+      setTimeout(() => otpInputRef.current?.focus(), 300);
     } catch (e) {
       const msg = e.response?.data?.error || 'Failed to send OTP. Please try again.';
       Alert.alert('Error', msg);
@@ -45,24 +45,9 @@ export default function LoginScreen({ navigation }) {
     }
   };
 
-  const handleOtpChange = (val, index) => {
-    const digitsOnly = val.replace(/[^0-9]/g, '');
-    if (digitsOnly.length > 1) {
-      const newOtp = [...otp];
-      for (let i = 0; i < 6; i++) newOtp[i] = digitsOnly[i] || '';
-      setOtp(newOtp);
-      otpRefs.current[Math.min(digitsOnly.length - 1, 5)]?.focus();
-      return;
-    }
-    const newOtp = [...otp];
-    newOtp[index] = digitsOnly;
-    setOtp(newOtp);
-    if (digitsOnly && index < 5) otpRefs.current[index + 1]?.focus();
-  };
-
-  const handleOtpKeyPress = (e, index) => {
-    if (e.nativeEvent.key === 'Backspace' && !otp[index] && index > 0)
-      otpRefs.current[index - 1]?.focus();
+  const handleOtpChange = (value) => {
+    const digits = value.replace(/[^0-9]/g, '').slice(0, 6);
+    setOtp(Array.from({ length: 6 }, (_, i) => digits[i] || ''));
   };
 
   const handleVerifyOTP = async () => {
@@ -115,7 +100,7 @@ export default function LoginScreen({ navigation }) {
       await client.post('/users/send-login-otp/', { phone_number: cleanPhone });
       setOtp(['', '', '', '', '', '']);
       startTimer();
-      setTimeout(() => otpRefs.current[0]?.focus(), 300);
+      setTimeout(() => otpInputRef.current?.focus(), 300);
     } catch (e) {
       Alert.alert('Error', 'Failed to resend OTP. Please try again.');
     } finally {
@@ -125,7 +110,7 @@ export default function LoginScreen({ navigation }) {
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <ScrollView contentContainerStyle={styles.inner} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={styles.inner} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <View style={styles.logoSection}>
           <Image source={require('../../../assets/app-logo-full.png')} style={styles.logoImage} resizeMode="contain" />
         </View>
@@ -164,18 +149,27 @@ export default function LoginScreen({ navigation }) {
               <Text style={styles.subtitle}>We sent a 6-digit OTP to{'\n'}+91 {phone}</Text>
               <View style={styles.otpRow}>
                 {otp.map((digit, index) => (
-                  <TextInput
+                  <View
                     key={index}
-                    ref={ref => otpRefs.current[index] = ref}
                     style={[styles.otpBox, digit && styles.otpBoxFilled]}
-                    value={digit}
-                    onChangeText={val => handleOtpChange(val, index)}
-                    onKeyPress={e => handleOtpKeyPress(e, index)}
-                    keyboardType="numeric"
-                    maxLength={1}
-                    textAlign="center"
-                  />
+                    pointerEvents="none"
+                  >
+                    <Text style={{ fontSize: 20, fontWeight: '700', color: '#111' }}>
+                      {digit}
+                    </Text>
+                  </View>
                 ))}
+                <TextInput
+                  ref={otpInputRef}
+                  style={styles.otpHiddenInput}
+                  value={otp.join('')}
+                  onChangeText={handleOtpChange}
+                  keyboardType="number-pad"
+                  autoComplete="sms-otp"
+                  textContentType="oneTimeCode"
+                  maxLength={6}
+                  caretHidden
+                />
               </View>
               <TouchableOpacity
                 style={[styles.button, (loading || otp.join('').length !== 6) && styles.buttonDisabled]}
@@ -208,6 +202,11 @@ export default function LoginScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#eff6ff' },
+  otpHiddenInput: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.01,
+    color: 'transparent',
+  },
   inner: { flexGrow: 1, alignItems: 'center', paddingHorizontal: 24, paddingTop: 65, paddingBottom: 24 },
   logoSection: {
     backgroundColor: '#ffffff', borderRadius: 24, padding: 20,
@@ -237,7 +236,7 @@ const styles = StyleSheet.create({
   },
   input: { flex: 1, padding: 14, fontSize: 15, color: '#111' },
   otpRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24, gap: 8 },
-  otpBox: { width: 46, height: 56, borderRadius: 12, borderWidth: 1.5, borderColor: '#E5E7EB', backgroundColor: '#F9FAFB', fontSize: 22, fontWeight: '700', color: '#111', textAlign: 'center' },
+  otpBox: { width: 46, height: 56, borderRadius: 12, borderWidth: 1.5, borderColor: '#E5E7EB', backgroundColor: '#F9FAFB', fontSize: 22, fontWeight: '700', color: '#111', textAlign: 'center', justifyContent: 'center', alignItems: 'center' },
   otpBoxFilled: { borderColor: '#1669ef', backgroundColor: '#eff6ff' },
   resendRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 16, marginTop: 4 },
   resendText: { fontSize: 13, color: '#888' },

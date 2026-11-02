@@ -57,7 +57,7 @@
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/e96e707f-3017-41db-bc6e-40d2eb791084"
+      "url": "https://u.expo.dev/0685df21-5304-446c-b78b-1387b0c5abb9"
     },
     "owner": "thanurvika",
     "plugins": [
@@ -84,7 +84,8 @@
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true
         }
-      ]
+      ],
+      "expo-font"
     ],
     "extra": {
       "eas": {

@@ -16,7 +16,7 @@ export default function RegisterScreen({ navigation }) {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [resendTimer, setResendTimer]     = useState(30);
   const [canResend, setCanResend]         = useState(false);
-  const otpRefs = useRef([]);
+  const otpInputRef = useRef(null);
   const { loginWithTokens } = useAuth();
 
   const startTimer = () => {
@@ -43,7 +43,7 @@ export default function RegisterScreen({ navigation }) {
       });
       setStep(2);
       startTimer();
-      setTimeout(() => otpRefs.current[0]?.focus(), 300);
+      setTimeout(() => otpInputRef.current?.focus(), 300);
     } catch (e) {
       const msg = e.response?.data?.error || 'Failed to send OTP. Please try again.';
       Alert.alert('Error', msg);
@@ -52,24 +52,9 @@ export default function RegisterScreen({ navigation }) {
     }
   };
 
-  const handleOtpChange = (val, index) => {
-    const digitsOnly = val.replace(/[^0-9]/g, '');
-    if (digitsOnly.length > 1) {
-      const newOtp = [...otp];
-      for (let i = 0; i < 6; i++) newOtp[i] = digitsOnly[i] || '';
-      setOtp(newOtp);
-      otpRefs.current[Math.min(digitsOnly.length - 1, 5)]?.focus();
-      return;
-    }
-    const newOtp = [...otp];
-    newOtp[index] = digitsOnly;
-    setOtp(newOtp);
-    if (digitsOnly && index < 5) otpRefs.current[index + 1]?.focus();
-  };
-
-  const handleOtpKeyPress = (e, index) => {
-    if (e.nativeEvent.key === 'Backspace' && !otp[index] && index > 0)
-      otpRefs.current[index - 1]?.focus();
+  const handleOtpChange = (value) => {
+    const digits = value.replace(/[^0-9]/g, '').slice(0, 6);
+    setOtp(Array.from({ length: 6 }, (_, i) => digits[i] || ''));
   };
 
   const handleVerifyAndRegister = async () => {
@@ -100,7 +85,7 @@ export default function RegisterScreen({ navigation }) {
       await client.post('/users/send-register-otp/', { phone_number: phone, full_name: fullName, user_type: 'buyer' });
       setOtp(['', '', '', '', '', '']);
       startTimer();
-      setTimeout(() => otpRefs.current[0]?.focus(), 300);
+      setTimeout(() => otpInputRef.current?.focus(), 300);
     } catch (e) {
       Alert.alert('Error', 'Failed to resend OTP. Please try again.');
     } finally {
@@ -191,18 +176,31 @@ export default function RegisterScreen({ navigation }) {
 
               <View style={styles.otpRow}>
                 {otp.map((digit, index) => (
-                  <TextInput
+                  <View
                     key={index}
-                    ref={ref => otpRefs.current[index] = ref}
-                    style={[styles.otpBox, digit && styles.otpBoxFilled]}
-                    value={digit}
-                    onChangeText={val => handleOtpChange(val, index)}
-                    onKeyPress={e => handleOtpKeyPress(e, index)}
-                    keyboardType="numeric"
-                    maxLength={1}
-                    textAlign="center"
-                  />
+                    style={[
+                      styles.otpBox,
+                      digit && styles.otpBoxFilled,
+                      { alignItems: 'center', justifyContent: 'center' },
+                    ]}
+                    pointerEvents="none"
+                  >
+                    <Text style={{ fontSize: 20, fontWeight: '700', color: '#111' }}>
+                      {digit}
+                    </Text>
+                  </View>
                 ))}
+                <TextInput
+                  ref={otpInputRef}
+                  style={styles.otpHiddenInput}
+                  value={otp.join('')}
+                  onChangeText={handleOtpChange}
+                  keyboardType="number-pad"
+                  autoComplete="sms-otp"
+                  textContentType="oneTimeCode"
+                  maxLength={6}
+                  caretHidden
+                />
               </View>
 
               <TouchableOpacity
@@ -238,6 +236,11 @@ export default function RegisterScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#eff6ff' },
+  otpHiddenInput: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.01,
+    color: 'transparent',
+  },
   inner: { flexGrow: 1, alignItems: 'center', padding: 24, paddingTop: 60 },
   logoSection: {
     backgroundColor: '#ffffff', borderRadius: 24, padding: 24,

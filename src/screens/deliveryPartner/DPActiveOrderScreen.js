@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, ScrollView, Platform, StatusBar,
+  View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, ScrollView, Platform, StatusBar, Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -43,6 +43,34 @@ export default function DPActiveOrderScreen({ route, navigation }) {
 
   const currentStepIndex = order ? STEPS.findIndex((s) => s.key === order.dp_status) : -1;
   const currentStep = currentStepIndex >= 0 ? STEPS[currentStepIndex] : null;
+
+  const openNavigation = async (latitude, longitude, address) => {
+    const lat = Number(latitude);
+    const lng = Number(longitude);
+
+    const hasCoordinates =
+      latitude !== null && latitude !== undefined &&
+      longitude !== null && longitude !== undefined &&
+      Number.isFinite(lat) && Number.isFinite(lng) &&
+      lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+
+    const destination = hasCoordinates
+      ? `${lat},${lng}`
+      : address?.trim();
+
+    if (!destination) {
+      Alert.alert('Location Unavailable', 'No navigation location is available.');
+      return;
+    }
+
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
+
+    try {
+      await Linking.openURL(url);
+    } catch (error) {
+      Alert.alert('Navigation Error', 'Unable to open Google Maps.');
+    }
+  };
 
   const handleAdvance = async () => {
     if (!currentStep) return;
@@ -96,12 +124,46 @@ export default function DPActiveOrderScreen({ route, navigation }) {
           <Text style={styles.infoText}>{order.shop_name}</Text>
         </View>
         <Text style={styles.addressText}>{order.shop_address}</Text>
+        <TouchableOpacity
+          style={styles.navigateButton}
+          onPress={() => openNavigation(
+            order.shop_latitude, order.shop_longitude, order.shop_address
+          )}
+        >
+          <Ionicons name="navigate-outline" size={17} color="#1669ef" />
+          <Text style={styles.navigateText}>Navigate to Shop</Text>
+        </TouchableOpacity>
         <View style={styles.divider} />
         <View style={styles.infoRow}>
           <Ionicons name="location-outline" size={18} color="#6B7280" />
           <Text style={styles.infoText}>Delivery Address</Text>
         </View>
         <Text style={styles.addressText}>{order.delivery_address}</Text>
+        <TouchableOpacity
+          style={styles.navigateButton}
+          onPress={() => openNavigation(
+            order.delivery_latitude, order.delivery_longitude, order.delivery_address
+          )}
+        >
+          <Ionicons name="navigate-outline" size={17} color="#1669ef" />
+          <Text style={styles.navigateText}>Navigate to Buyer</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.itemsCard}>
+        <Text style={styles.itemsTitle}>Order Items</Text>
+        {Array.isArray(order.items) && order.items.length > 0 ? (
+          order.items.map((item, index) => (
+            <View key={index} style={styles.itemRow}>
+              <Text style={styles.itemName}>
+                {item.product_name} × {item.quantity}
+              </Text>
+              <Text style={styles.itemPrice}>₹{item.price}</Text>
+            </View>
+          ))
+        ) : (
+          <Text style={styles.addressText}>Item details unavailable</Text>
+        )}
       </View>
 
       <View style={styles.stepperCard}>
@@ -155,6 +217,31 @@ const styles = StyleSheet.create({
   infoText: { fontSize: 14, fontWeight: '600', color: '#111827' },
   addressText: { fontSize: 13, color: '#6B7280', marginLeft: 26, marginBottom: 8 },
   divider: { height: 1, backgroundColor: '#F0EFEA', marginVertical: 8 },
+  navigateButton: {
+    flexDirection: 'row', alignItems: 'center',
+    gap: 8, marginLeft: 26, paddingVertical: 8,
+  },
+  navigateText: {
+    color: '#1669ef', fontSize: 13, fontWeight: '700',
+  },
+  itemsCard: {
+    borderWidth: 1, borderColor: '#E5E7EB',
+    borderRadius: 14, padding: 16, marginBottom: 16,
+  },
+  itemsTitle: {
+    fontSize: 15, fontWeight: '700',
+    color: '#111827', marginBottom: 12,
+  },
+  itemRow: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', gap: 12, marginBottom: 8,
+  },
+  itemName: {
+    flex: 1, fontSize: 13, color: '#374151',
+  },
+  itemPrice: {
+    fontSize: 13, fontWeight: '600', color: '#111827',
+  },
   stepperCard: {
     borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 14, padding: 16, marginBottom: 16,
   },

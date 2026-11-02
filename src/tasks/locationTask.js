@@ -11,7 +11,15 @@ TaskManager.defineTask(DP_LOCATION_TASK, async ({ data, error }) => {
   }
   if (data) {
     const { locations } = data;
-    const latest = locations && locations[0];
+    const latest = Array.isArray(locations)
+      ? locations.reduce(
+          (newest, location) =>
+            !newest || location.timestamp > newest.timestamp
+              ? location
+              : newest,
+          null
+        )
+      : null;
     if (!latest) return;
 
     try {

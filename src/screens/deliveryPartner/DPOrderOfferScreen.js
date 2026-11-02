@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, FlatList,
-  ActivityIndicator, Alert, RefreshControl,
+  ActivityIndicator, Alert, RefreshControl, Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -32,14 +32,62 @@ export default function DPOrderOfferScreen({ navigation }) {
 
   useFocusEffect(
     useCallback(() => {
+      let active = true;
+      let fetching = false;
+
+      const refreshOrders = async () => {
+        if (!active || fetching) return;
+        fetching = true;
+        try {
+          await fetchOrders();
+        } finally {
+          fetching = false;
+        }
+      };
+
       setLoading(true);
-      fetchOrders();
+      refreshOrders();
+
+      const interval = setInterval(refreshOrders, 10000);
+
+      return () => {
+        active = false;
+        clearInterval(interval);
+      };
     }, [])
   );
 
   const handleRefresh = () => {
     setRefreshing(true);
     fetchOrders();
+  };
+
+  const openNavigation = async (latitude, longitude, address) => {
+    const lat = Number(latitude);
+    const lng = Number(longitude);
+
+    const hasCoordinates =
+      latitude !== null && latitude !== undefined &&
+      longitude !== null && longitude !== undefined &&
+      Number.isFinite(lat) && Number.isFinite(lng) &&
+      lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+
+    const destination = hasCoordinates
+      ? `${lat},${lng}`
+      : address?.trim();
+
+    if (!destination) {
+      Alert.alert('Location Unavailable', 'No navigation location is available.');
+      return;
+    }
+
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
+
+    try {
+      await Linking.openURL(url);
+    } catch (error) {
+      Alert.alert('Navigation Error', 'Unable to open Google Maps.');
+    }
   };
 
   const handleAccept = async (orderId) => {
@@ -140,8 +188,44 @@ export default function DPOrderOfferScreen({ navigation }) {
               <Text style={styles.shopName}>{item.shop_name}</Text>
               <Text style={styles.orderAmount}>₹{item.delivery_fee}</Text>
             </View>
-            <Text style={styles.addressText} numberOfLines={1}>Pickup: {item.shop_address}</Text>
-            <Text style={styles.addressText} numberOfLines={1}>Drop: {item.delivery_address}</Text>
+            <Text style={styles.addressText}>Pickup: {item.shop_address}</Text>
+            <TouchableOpacity
+              style={styles.navigateButton}
+              onPress={() => openNavigation(
+                item.shop_latitude, item.shop_longitude, item.shop_address
+              )}
+            >
+              <Ionicons name="navigate-outline" size={16} color="#1669ef" />
+              <Text style={styles.navigateText}>Navigate to Shop</Text>
+            </TouchableOpacity>
+
+            <Text style={styles.addressText}>Drop: {item.delivery_address}</Text>
+            <TouchableOpacity
+              style={styles.navigateButton}
+              onPress={() => openNavigation(
+                item.delivery_latitude, item.delivery_longitude, item.delivery_address
+              )}
+            >
+              <Ionicons name="navigate-outline" size={16} color="#1669ef" />
+              <Text style={styles.navigateText}>Navigate to Buyer</Text>
+            </TouchableOpacity>
+
+            <View style={styles.itemsSection}>
+              <Text style={styles.itemsTitle}>Order Items</Text>
+              {Array.isArray(item.items) && item.items.length > 0 ? (
+                item.items.map((product, index) => (
+                  <View key={index} style={styles.itemRow}>
+                    <Text style={styles.itemName}>
+                      {product.product_name} × {product.quantity}
+                    </Text>
+                    <Text style={styles.itemPrice}>₹{product.price}</Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.addressText}>Item details unavailable</Text>
+              )}
+            </View>
+
             <View style={styles.orderFooter}>
               <Text style={styles.paymentBadge}>{item.payment_mode === 'cod' ? 'Cash on Delivery' : 'Prepaid'}</Text>
               <Text style={styles.totalText}>Order value: ₹{item.total_amount}</Text>
@@ -225,6 +309,35 @@ const styles = StyleSheet.create({
   shopName: { fontSize: 16, fontWeight: '700', color: '#111827' },
   orderAmount: { fontSize: 16, fontWeight: '700', color: '#16a34a' },
   addressText: { fontSize: 13, color: '#6B7280', marginBottom: 2 },
+  navigateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingVertical: 9,
+    marginBottom: 8,
+  },
+  navigateText: {
+    color: '#1669ef',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  itemsSection: {
+    marginTop: 12, marginBottom: 8,
+    paddingTop: 10, borderTopWidth: 1, borderTopColor: '#E5E7EB',
+  },
+  itemsTitle: {
+    fontSize: 13, fontWeight: '700', color: '#111827', marginBottom: 8,
+  },
+  itemRow: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', gap: 12, marginBottom: 6,
+  },
+  itemName: {
+    flex: 1, fontSize: 13, color: '#374151',
+  },
+  itemPrice: {
+    fontSize: 13, fontWeight: '600', color: '#111827',
+  },
   orderFooter: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, marginBottom: 12 },
   paymentBadge: {
     fontSize: 11, fontWeight: '600', color: '#1669ef', backgroundColor: '#EFF6FF',

@@ -6,6 +6,7 @@ import {
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { globalStore } from '../../utils/globalStore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 
 const GOOGLE_API_KEY = 'AIzaSyCS_YRu6O61LCZn_QlypzjcjSdeRqbQaDI';
@@ -27,7 +28,34 @@ export default function MapPickerScreen({ navigation, route }) {
   const [searchText, setSearchText] = useState('');
   const [searching, setSearching]   = useState(false);
 
-  useEffect(() => { getCurrentLocation(); }, []);
+  useEffect(() => {
+    const saved = globalStore.hasCustomLocation
+      ? globalStore.lastPickedLocation
+      : null;
+
+    if (
+      saved &&
+      Number.isFinite(Number(saved.lat)) &&
+      Number.isFinite(Number(saved.lng))
+    ) {
+      const latitude = Number(saved.lat);
+      const longitude = Number(saved.lng);
+
+      const savedRegion = {
+        latitude,
+        longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      };
+
+      setRegion(savedRegion);
+      setMarker({ latitude, longitude });
+      setAddress(saved.address || '');
+      mapRef.current?.animateToRegion(savedRegion, 500);
+    } else {
+      getCurrentLocation();
+    }
+  }, []);
 
   const getCurrentLocation = async () => {
     setLocating(true);
@@ -93,11 +121,26 @@ export default function MapPickerScreen({ navigation, route }) {
     if (!marker) { Alert.alert('Error', 'Please select a location on map first'); return; }
     const { isHomeScreen } = route.params || {};
     if (isHomeScreen) {
-      globalStore.homeLocation = {
+      const selectedLocation = {
         lat: marker.latitude,
         lng: marker.longitude,
         address: address,
+        source: 'manual',
       };
+
+      try {
+        await AsyncStorage.setItem(
+          'lastPickedLocation',
+          JSON.stringify(selectedLocation)
+        );
+      } catch (error) {
+        console.log('Could not persist selected location:', error);
+      }
+
+      globalStore.homeLocation = selectedLocation;
+      globalStore.lastPickedLocation = selectedLocation;
+      globalStore.hasCustomLocation = true;
+
       navigation.goBack();
       return;
     }

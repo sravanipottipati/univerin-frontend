@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import MapView, { Marker } from 'react-native-maps';
 import {
   View, Text, TouchableOpacity, StyleSheet,
   ScrollView, ActivityIndicator, Alert,
@@ -29,6 +31,121 @@ const STEPS = [
 
 const STATUSES = ['placed', 'accepted', 'preparing', 'dispatched', 'delivered'];
 
+
+const TRACKING_STAGES = [
+  'accepted', 'arrived_at_shop', 'picked_up', 'arrived_at_buyer'
+];
+
+function BuyerLiveTrackingMap({ orderId }) {
+  const [location, setLocation] = useState(null);
+  const [message, setMessage] = useState('Finding your delivery partner...');
+  const [updatedAt, setUpdatedAt] = useState(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      let fetching = false;
+
+      const refresh = async () => {
+        if (!active || fetching) return;
+        fetching = true;
+
+        try {
+          const res = await client.get(`/orders/${orderId}/tracking/`);
+          if (!active) return;
+
+          const data = res.data;
+          if (
+            data.tracking_available &&
+            Number.isFinite(Number(data.latitude)) &&
+            Number.isFinite(Number(data.longitude)) &&
+            data.latitude !== null &&
+            data.longitude !== null
+          ) {
+            setLocation({
+              latitude: Number(data.latitude),
+              longitude: Number(data.longitude),
+            });
+            setUpdatedAt(data.updated_at);
+            setMessage('');
+          } else {
+            setLocation(null);
+            setUpdatedAt(null);
+            setMessage('Waiting for a recent delivery partner GPS update.');
+          }
+        } catch (error) {
+          if (!active) return;
+          setLocation(null);
+          setUpdatedAt(null);
+          setMessage('Live location is temporarily unavailable.');
+          console.log('Buyer tracking error:', error?.response?.status || error.message);
+        } finally {
+          fetching = false;
+        }
+      };
+
+      refresh();
+      const timer = setInterval(refresh, 15000);
+
+      return () => {
+        active = false;
+        clearInterval(timer);
+      };
+    }, [orderId])
+  );
+
+  return (
+    <View style={styles.card}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+        <Ionicons name="navigate-circle-outline" size={23} color="#1669ef" />
+        <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827' }}>
+          Track Your Delivery
+        </Text>
+      </View>
+
+      {location ? (
+        <>
+          <MapView
+            style={{ width: '100%', height: 240, borderRadius: 12 }}
+            region={{
+              ...location,
+              latitudeDelta: 0.012,
+              longitudeDelta: 0.012,
+            }}
+            scrollEnabled
+            zoomEnabled
+          >
+            <Marker
+              coordinate={location}
+              title="Your Delivery Partner"
+              description="Latest available GPS location"
+            >
+              <Ionicons name="bicycle" size={29} color="#1669ef" />
+            </Marker>
+          </MapView>
+          <Text style={{ color: '#64748B', fontSize: 12, marginTop: 10 }}>
+            Latest GPS update: {updatedAt ? new Date(updatedAt).toLocaleTimeString() : 'Unavailable'}
+          </Text>
+        </>
+      ) : (
+        <View style={{
+          minHeight: 110, justifyContent: 'center', alignItems: 'center',
+          backgroundColor: '#F1F5F9', borderRadius: 12, padding: 16
+        }}>
+          <Ionicons name="location-outline" size={27} color="#94A3B8" />
+          <Text style={{ color: '#64748B', textAlign: 'center', marginTop: 8 }}>
+            {message}
+          </Text>
+        </View>
+      )}
+
+      <Text style={{ color: '#64748B', fontSize: 11, marginTop: 10 }}>
+        Location refreshes approximately every 15 seconds while this screen is open.
+      </Text>
+    </View>
+  );
+}
+
 export default function OrderDetailScreen({ navigation, route }) {
   const { orderId }         = route.params;
   const [order, setOrder]   = useState(null);
@@ -46,7 +163,30 @@ export default function OrderDetailScreen({ navigation, route }) {
     }
   };
 
-  useEffect(() => { fetchOrder(); }, [orderId]);
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+
+      const refreshOrder = async () => {
+        try {
+          const res = await client.get(`/orders/${orderId}/`);
+          if (active) setOrder(res.data);
+        } catch (error) {
+          console.log('Order status refresh:', error.message);
+        } finally {
+          if (active) setLoading(false);
+        }
+      };
+
+      refreshOrder();
+      const timer = setInterval(refreshOrder, 15000);
+
+      return () => {
+        active = false;
+        clearInterval(timer);
+      };
+    }, [orderId])
+  );
 
   const handleCancelOrder = () => {
     Alert.alert('Cancel Order', 'Are you sure you want to cancel this order?', [
@@ -104,11 +244,11 @@ export default function OrderDetailScreen({ navigation, route }) {
   const canCancel     = order.status === 'placed';
   const currentIndex  = STATUSES.indexOf(order.status);
   const shopHasGST    = !!(order.vendor_gstin && order.vendor_gstin.trim());
-  const subtotal      = order.items?.reduce((sum, i) => sum + (parseFloat(i.price) * i.quantity * (shopHasGST ? (1 + (parseFloat(i.product_gst || 0) / 100)) : 1)), 0) || parseFloat(order.subtotal || 0);
+  const subtotal      = parseFloat(order.subtotal ?? 0);
   const deliveryFee   = parseFloat(order.delivery_fee || 0) + parseFloat(order.gst_on_delivery || 0);
-  const platformFee   = parseFloat((parseFloat(order.platform_fee || 10) * 1.18).toFixed(1));
+  const platformFee   = parseFloat(order.platform_fee ?? 0) * 1.18;
   const gstOnPlatform = parseFloat(order.gst_on_platform || 0);
-  const total         = parseFloat((subtotal + deliveryFee + platformFee).toFixed(1));
+  const total         = parseFloat(order.total_amount ?? 0);
   const totalSavings  = order.items?.reduce((sum, i) => {
     const mrp = parseFloat(i.product_mrp || 0);
     const price = parseFloat(i.price || 0);
@@ -199,6 +339,12 @@ export default function OrderDetailScreen({ navigation, route }) {
             </View>
           </View>
         )}
+
+        {order.delivery_partner &&
+          !['cancelled', 'rejected', 'delivered'].includes(order.status) &&
+          TRACKING_STAGES.includes(order.dp_status) && (
+            <BuyerLiveTrackingMap orderId={orderId} />
+          )}
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Items ({order.items?.length || 0})</Text>

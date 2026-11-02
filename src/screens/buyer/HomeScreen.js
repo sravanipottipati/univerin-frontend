@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
   ScrollView, RefreshControl, Image,
-  Dimensions, FlatList, Alert,
+  Dimensions, FlatList, Alert, Platform, Linking,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
@@ -149,9 +149,11 @@ export default function HomeScreen({ navigation, route }) {
   const [showProductModal, setShowProductModal] = useState(false);
   const bannerRef                     = useRef(null);
   const isFetchingRef                 = useRef(false);
+  const shopRequestIdRef              = useRef(0);
   const lastFetchRef                  = useRef(null);
   const lastTownRef                   = useRef(null);
   const hasCustomLocationRef          = useRef(false);
+  const [locationReady, setLocationReady] = useState(false);
 
   const { user }                                 = useAuth();
   const { shop: cartShop, cartCount, cartTotal, fetchCartFromDb, carts, addToCart, removeFromCart } = useCart();
@@ -171,13 +173,41 @@ export default function HomeScreen({ navigation, route }) {
       if (saved) {
         try {
           const loc = JSON.parse(saved);
-          const shortAddress = loc.address?.split(',').slice(0, 2).join(',') || 'Selected Location';
-          globalStore.lastPickedLocation = loc;
-          globalStore.hasCustomLocation = true;
-          hasCustomLocationRef.current = true;
-          setTown(shortAddress);
+          const lat = Number(loc?.lat);
+          const lng = Number(loc?.lng);
+
+          if (
+            loc?.lat != null &&
+            loc?.lng != null &&
+            Number.isFinite(lat) &&
+            Number.isFinite(lng) &&
+            lat >= -90 && lat <= 90 &&
+            lng >= -180 && lng <= 180
+          ) {
+            const restoredLocation = { ...loc, lat, lng };
+            const shortAddress =
+              restoredLocation.address?.split(',').slice(0, 2).join(',') ||
+              'Selected Location';
+
+            if (restoredLocation.source === 'manual') {
+              globalStore.lastPickedLocation = restoredLocation;
+              globalStore.hasCustomLocation = true;
+              hasCustomLocationRef.current = true;
+              setTown(shortAddress);
+            } else {
+              globalStore.lastPickedLocation = null;
+              globalStore.hasCustomLocation = false;
+              hasCustomLocationRef.current = false;
+            }
+          } else {
+            console.log('Saved location has invalid coordinates');
+          }
         } catch (e) { console.log('Location parse error:', e); }
       }
+    }).catch(e => {
+      console.log('Location restore error:', e);
+    }).finally(() => {
+      setLocationReady(true);
     });
   }, []);
 
@@ -200,97 +230,211 @@ export default function HomeScreen({ navigation, route }) {
   };
 
   const fetchShops = useCallback(async (currentTown, overrideLat=null, overrideLng=null) => {
-    if (isFetchingRef.current) return;
-    isFetchingRef.current = true;
+    const requestId = ++shopRequestIdRef.current;
+    const isLatest = () => requestId === shopRequestIdRef.current;
+    const t = currentTown || town;
 
-    const t          = currentTown || town;
-    const townCoords = getTownCoords(t);
-    let   gpsCoords  = townCoords;
+    let coords = getTownCoords(t);
+    const selected = globalStore.hasCustomLocation
+      ? globalStore.lastPickedLocation
+      : null;
 
     if (overrideLat != null && overrideLng != null) {
-      gpsCoords = { lat: overrideLat, lng: overrideLng };
-      setLocationDenied(false);
+      coords = { lat: overrideLat, lng: overrideLng };
+      if (isLatest()) setLocationDenied(false);
+    } else if (selected?.lat != null && selected?.lng != null) {
+      coords = { lat: selected.lat, lng: selected.lng };
+      if (isLatest()) setLocationDenied(false);
     } else {
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (!isLatest()) return;
+
+        if (status !== 'granted') {
+          setLocationDenied(true);
+          setLoading(false);
+          setRefreshing(false);
+          return;
+        }
+
+        setLocationDenied(false);
+
+        const loc = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Low,
+        });
+        if (!isLatest()) return;
+
+        const { latitude, longitude } = loc.coords;
+        if (!isCoordInIndia(latitude, longitude)) {
+          console.log('GPS coordinates outside supported region');
+          setLocationDenied(true);
+          setShops([]);
+          setLoading(false);
+          setRefreshing(false);
+          return;
+        }
+
+        coords = { lat: latitude, lng: longitude };
+
+        if (!globalStore.hasCustomLocation && !globalStore.lastPickedLocation) {
+          try {
+            const geoRes = await Location.reverseGeocodeAsync({
+              latitude: coords.lat,
+              longitude: coords.lng,
+            });
+            if (!isLatest()) return;
+
+            const place = geoRes[0];
+            const address = place
+              ? [place.name, place.street, place.city, place.region, place.country]
+                  .filter(Boolean).join(', ')
+              : t;
+
+            if (!globalStore.hasCustomLocation) {
+              globalStore.lastPickedLocation = {
+                lat: coords.lat, lng: coords.lng, address,
+              };
+            }
+          } catch (geoErr) {
+            if (isLatest() && !globalStore.hasCustomLocation) {
+              globalStore.lastPickedLocation = {
+                lat: coords.lat, lng: coords.lng, address: t,
+              };
+            }
+          }
+        }
+      } catch (e) {
+        if (!isLatest()) return;
+        console.log('GPS location error:', e.message);
         setLocationDenied(true);
+        setShops([]);
         setLoading(false);
-        isFetchingRef.current = false;
+        setRefreshing(false);
         return;
       }
-      setLocationDenied(false);
-      const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Low,
-        timeInterval: 5000,
-      });
-      const { latitude: lat, longitude: lng } = loc.coords;
-      gpsCoords = isCoordInIndia(lat, lng) ? { lat, lng } : townCoords;
-      // Save GPS location as a fallback for Checkout if no saved address exists
-      if (isCoordInIndia(lat, lng) || true) {
-        try {
-          const geoRes = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${gpsCoords.lat},${gpsCoords.lng}&key=AIzaSyCS_YRu6O61LCZn_QlypzjcjSdeRqbQaDI`);
-          const geoData = await geoRes.json();
-          const fullAddress = geoData.results?.[0]?.formatted_address || t;
-          globalStore.lastPickedLocation = { lat: gpsCoords.lat, lng: gpsCoords.lng, address: fullAddress };
-        } catch (geoErr) {
-          globalStore.lastPickedLocation = { lat: gpsCoords.lat, lng: gpsCoords.lng, address: t };
-        }
-      }
-    } catch (e) {
-      gpsCoords = townCoords;
-    }
     }
 
+    if (!isLatest()) return;
+
     try {
-      // If using real GPS (not town fallback), skip town filter
-      const url = `/vendors/nearby/?town=${t}&lat=${gpsCoords.lat}&lng=${gpsCoords.lng}&radius=${DEFAULT_RADIUS}`;
-      const res = await client.get(url);
+      const params = new URLSearchParams({
+        town: t,
+        lat: String(coords.lat),
+        lng: String(coords.lng),
+        radius: String(DEFAULT_RADIUS),
+      });
+
+      const res = await client.get(`/vendors/nearby/?${params.toString()}`);
+      if (!isLatest()) return;
+
       setIsOffline(false);
-      if (Array.isArray(res.data))   setShops(res.data);
-      else if (res.data.shops)       setShops(res.data.shops);
-      else if (res.data.results)     setShops(res.data.results);
-      else                           setShops([]);
+      if (Array.isArray(res.data)) setShops(res.data);
+      else if (Array.isArray(res.data?.shops)) setShops(res.data.shops);
+      else if (Array.isArray(res.data?.results)) setShops(res.data.results);
+      else setShops([]);
     } catch (e) {
+      if (!isLatest()) return;
       setShops([]);
       setIsOffline(e.message === 'Network Error' || !e.response);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
-      isFetchingRef.current = false;
+      if (isLatest()) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, [town]);
 
   useFocusEffect(
     useCallback(() => {
+      if (!locationReady) return;
+
+      // Check device location services whenever Buyer Home opens.
+      (async () => {
+        try {
+          const enabled = await Location.hasServicesEnabledAsync();
+
+          if (!enabled) {
+            Alert.alert(
+              'Turn On Location',
+              'Please enable your phone location services to find nearby shops accurately.',
+              [
+                { text: 'Not Now', style: 'cancel' },
+                {
+                  text: 'Turn On Location',
+                  onPress: async () => {
+                    try {
+                      if (Platform.OS === 'android') {
+                        await Location.enableNetworkProviderAsync();
+                      } else {
+                        await Linking.openURL('App-Prefs:Privacy&path=LOCATION');
+                      }
+                    } catch (error) {
+                      Alert.alert(
+                        'Location Settings',
+                        'Please turn on Location Services in your phone settings.',
+                        [
+                          { text: 'OK' },
+                          {
+                            text: 'Select Manually',
+                            onPress: () => navigation.navigate('TownSelection'),
+                          },
+                        ]
+                      );
+                    }
+                  },
+                },
+              ]
+            );
+          }
+        } catch (error) {
+          console.log('Location services check:', error.message);
+        }
+      })();
+
       fetchCartFromDb();
 
       if (globalStore.homeLocation) {
         const loc = globalStore.homeLocation;
         globalStore.homeLocation = null;
         const shortAddress = loc.address?.split(',').slice(0, 2).join(',') || 'Selected Location';
-        hasCustomLocationRef.current = true;
-        globalStore.hasCustomLocation = true;
+        const isManual = loc.source === 'manual';
+        hasCustomLocationRef.current = isManual;
+        globalStore.hasCustomLocation = isManual;
         setLocationDenied(false);
         // Save persistently so Checkout can use it as a fallback address
         globalStore.lastPickedLocation = { lat: loc.lat, lng: loc.lng, address: loc.address };
         AsyncStorage.setItem('lastPickedLocation', JSON.stringify({ lat: loc.lat, lng: loc.lng, address: loc.address }));
         setTown(shortAddress);
         setLoading(true);
+        lastTownRef.current = `${loc.lat},${loc.lng}`;
         lastFetchRef.current = Date.now();
-        fetchShops(null, loc.lat, loc.lng);
+        fetchShops(shortAddress, loc.lat, loc.lng);
         fetchPopularProducts(shortAddress);
         return;
       }
 
       if (globalStore.hasCustomLocation && globalStore.lastPickedLocation) {
         hasCustomLocationRef.current = true;
-        if (shops.length === 0) {
-          const loc = globalStore.lastPickedLocation;
-          const shortAddress = loc.address?.split(',').slice(0, 2).join(',') || 'Selected Location';
+
+        const loc = globalStore.lastPickedLocation;
+        const shortAddress =
+          loc.address?.split(',').slice(0, 2).join(',') || 'Selected Location';
+
+        const locationKey = `${loc.lat},${loc.lng}`;
+        const now = Date.now();
+        const locationChanged = lastTownRef.current !== locationKey;
+        const cacheExpired =
+          !lastFetchRef.current ||
+          now - lastFetchRef.current > 5 * 60 * 1000;
+
+        if (locationChanged || cacheExpired || shops.length === 0) {
           setTown(shortAddress);
           setLoading(true);
-          fetchShops(null, loc.lat, loc.lng);
+
+          lastTownRef.current = locationKey;
+          lastFetchRef.current = now;
+
+          fetchShops(shortAddress, loc.lat, loc.lng);
           fetchPopularProducts(shortAddress);
         }
         return;
@@ -310,13 +454,21 @@ export default function HomeScreen({ navigation, route }) {
         fetchShops(currentTown);
         fetchPopularProducts(currentTown);
       }
-    }, [user?.town])
+    }, [user?.town, locationReady])
   );
 
   const onRefresh = async () => {
     setRefreshing(true);
-    isFetchingRef.current = false;
-    fetchShops(town);
+
+    const savedLocation = globalStore.hasCustomLocation
+      ? globalStore.lastPickedLocation
+      : null;
+
+    if (savedLocation?.lat != null && savedLocation?.lng != null) {
+      fetchShops(town, savedLocation.lat, savedLocation.lng);
+    } else {
+      fetchShops(town);
+    }
   };
 
   // When category changes reset subcategory

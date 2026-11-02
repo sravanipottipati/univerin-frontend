@@ -21,6 +21,37 @@ const STATUS_INFO = {
   rejected:   { label: 'Rejected',         icon: 'close-circle-outline',     color: '#DC2626', bg: '#FEF2F2' },
 };
 
+const DP_PROGRESS_INFO = {
+  unassigned: {
+    label: 'Awaiting Delivery Assignment',
+    description: 'Find a Delivery Partner when the order is being prepared.',
+  },
+  offered: {
+    label: 'Finding Delivery Partner',
+    description: 'A delivery offer has been sent. Waiting for acceptance.',
+  },
+  accepted: {
+    label: 'Delivery Partner Assigned',
+    description: 'The Delivery Partner is on the way to the shop.',
+  },
+  arrived_at_shop: {
+    label: 'Delivery Partner Arrived',
+    description: 'The Delivery Partner has reached the shop for pickup.',
+  },
+  picked_up: {
+    label: 'Order Picked Up',
+    description: 'The Delivery Partner has collected the order.',
+  },
+  arrived_at_buyer: {
+    label: 'Arrived at Buyer',
+    description: 'The Delivery Partner has reached the buyer.',
+  },
+  delivered: {
+    label: 'Delivery Completed',
+    description: 'The order has been delivered successfully.',
+  },
+};
+
 const NEXT_ACTION = {
   placed:     { label: 'Accept Order',       next: 'accepted',   color: '#16A34A', icon: 'checkmark-circle' },
   accepted:   { label: 'Start Preparing',    next: 'preparing',  color: '#1669ef', icon: 'restaurant' },
@@ -69,7 +100,40 @@ export default function VendorOrderDetailScreen({ navigation, route }) {
 
   useFocusEffect(
     useCallback(() => {
-      fetchOrder();
+      let active = true;
+      let refreshing = false;
+
+      const refreshOrder = async () => {
+        if (!active || refreshing) return;
+        refreshing = true;
+
+        try {
+          const res = await client.get(`/orders/${orderId}/`);
+          if (active) {
+            console.log('SELLER ORDER DEBUG:', {
+              status: res.data?.status,
+              dp_status: res.data?.dp_status,
+              delivery_partner: Boolean(res.data?.delivery_partner),
+              delivery_partner_id: res.data?.delivery_partner_id,
+            });
+            setOrder(res.data);
+            setLoading(false);
+          }
+        } catch (error) {
+          console.log('Order refresh error:', error.message);
+          if (active) setLoading(false);
+        } finally {
+          refreshing = false;
+        }
+      };
+
+      refreshOrder();
+      const interval = setInterval(refreshOrder, 10000);
+
+      return () => {
+        active = false;
+        clearInterval(interval);
+      };
     }, [orderId])
   );
 
@@ -192,7 +256,7 @@ ${order.delivery_address}
   const isCancelled = ['cancelled', 'rejected'].includes(order.status);
   const isDelivered = order.status === 'delivered';
   const isNew       = order.status === 'placed';
-  const subtotal        = order.items?.reduce((sum, i) => sum + (parseFloat(i.price) * i.quantity * (1 + (parseFloat(i.product_gst || 0) / 100))), 0) || parseFloat(order.subtotal || 0);
+  const subtotal        = parseFloat(order.subtotal ?? 0);
   const commissionRate  = parseFloat(order.commission_rate || 0);
   const platformFeeGST  = Math.round(parseFloat(order.platform_fee || 0) * 1.18);
   const rawSubtotal     = parseFloat(order.subtotal || order.items?.reduce((s,i) => s + parseFloat(i.price) * i.quantity, 0) || 0);
@@ -287,6 +351,35 @@ ${order.delivery_address}
           </View>
         )}
 
+        {!isNew &&
+          !isCancelled &&
+          order.dp_status &&
+          DP_PROGRESS_INFO[order.dp_status] && (
+          <View style={styles.progressCard}>
+            <Text style={styles.progressTitle}>
+              Delivery Partner Progress
+            </Text>
+
+            <Text style={{
+              fontSize: 16,
+              fontWeight: '700',
+              color: '#1669ef',
+              marginTop: 10,
+            }}>
+              {DP_PROGRESS_INFO[order.dp_status].label}
+            </Text>
+
+            <Text style={{
+              fontSize: 13,
+              color: '#64748b',
+              marginTop: 6,
+              lineHeight: 19,
+            }}>
+              {DP_PROGRESS_INFO[order.dp_status].description}
+            </Text>
+          </View>
+        )}
+
         {isDelivered && (
           <View style={[styles.progressCard, { backgroundColor: '#F0FDF4' }]}>
             <View style={styles.deliveredRow}>
@@ -312,7 +405,7 @@ ${order.delivery_address}
         {isDelivered && (
           <View style={[styles.card, { borderWidth: 1, borderColor: '#16A34A' }]}>
             <Text style={[styles.cardTitle, { color: '#16A34A' }]}>₹ Settlement Breakdown</Text>
-            <View style={styles.billRow}><Text style={styles.billLabel}>Items Total (incl. GST)</Text><Text style={styles.billValue}>Rs.{subtotal.toFixed(2)}</Text></View>
+            <View style={styles.billRow}><Text style={styles.billLabel}>{order.vendor_gstin?.trim() ? 'Items Total (incl. GST)' : 'Items Total'}</Text><Text style={styles.billValue}>Rs.{subtotal.toFixed(2)}</Text></View>
             <View style={styles.billRow}><Text style={styles.billLabel}>Commission ({commissionRate}%)</Text><Text style={[styles.billValue, { color: '#DC2626' }]}>- Rs.{commissionAmt.toFixed(2)}</Text></View>
             <View style={styles.billRow}><Text style={styles.billLabel}>GST TCS (0.5%)</Text><Text style={[styles.billValue, { color: '#DC2626' }]}>- Rs.{gstTcsAmt.toFixed(2)}</Text></View>
             <View style={styles.billRow}><Text style={styles.billLabel}>TDS 194-O (1%)</Text><Text style={[styles.billValue, { color: '#DC2626' }]}>- Rs.{tdsAmt.toFixed(2)}</Text></View>
@@ -336,7 +429,7 @@ ${order.delivery_address}
             </View>
           ))}
           <View style={styles.divider} />
-          <View style={styles.billRow}><Text style={styles.billTotalLabel}>Items Total (incl. GST)</Text><Text style={styles.billTotalValue}>Rs.{subtotal.toFixed(2)}</Text></View>
+          <View style={styles.billRow}><Text style={styles.billTotalLabel}>{order.vendor_gstin?.trim() ? 'Items Total (incl. GST)' : 'Items Total'}</Text><Text style={styles.billTotalValue}>Rs.{subtotal.toFixed(2)}</Text></View>
           <View style={styles.billRow}>
             <Text style={styles.billLabel}></Text>
           </View>

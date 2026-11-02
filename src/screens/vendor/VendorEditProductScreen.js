@@ -76,6 +76,7 @@ export default function VendorEditProductScreen({ navigation, route }) {
   const [category, setCategory]     = useState(product?.category || '');
   const [subcategory, setSubcat]    = useState(product?.subcategory || '');
   const [gst, setGst]               = useState(product?.gst_percentage ? parseInt(product.gst_percentage).toString() : '0');
+  const [gstPricingMode, setGstPricingMode] = useState(product?.gst_pricing_mode || 'exclusive');
   const [deliveryTime, setDelivery] = useState(product?.delivery_time ? `${product.delivery_time} mins` : '30 mins');
   const [isAvailable, setAvail]     = useState(product?.is_available ?? true);
   const [isReturnable, setReturnable] = useState(product?.is_returnable ?? true);
@@ -141,6 +142,7 @@ export default function VendorEditProductScreen({ navigation, route }) {
         subcategory: subcategory || '', hsn_code: hsnCode.trim(),
         mrp: mrp ? parseFloat(mrp) : null,
         gst_percentage: parseFloat(gst) || 0,
+        gst_pricing_mode: gstPricingMode,
         is_available: isAvailable, is_returnable: isReturnable,
         is_cod: isCod, delivery_time: deliveryMins,
         barcode: barcode.trim(), brand: brand.trim(),
@@ -424,6 +426,34 @@ export default function VendorEditProductScreen({ navigation, route }) {
               </TouchableOpacity>
             ))}
           </View>
+          <Text style={[styles.fieldLabel, { marginTop: 14 }]}>
+            Price includes GST?
+          </Text>
+          <View style={styles.gstRow}>
+            {[
+              { value: 'inclusive', label: 'Inclusive' },
+              { value: 'exclusive', label: 'Exclusive' },
+            ].map(option => (
+              <TouchableOpacity
+                key={option.value}
+                style={[
+                  styles.gstChip,
+                  gstPricingMode === option.value && styles.gstChipActive,
+                ]}
+                onPress={() => setGstPricingMode(option.value)}
+              >
+                <Text style={[
+                  styles.gstChipText,
+                  gstPricingMode === option.value && styles.gstChipTextActive,
+                ]}>
+                  {option.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <Text style={{ fontSize: 12, color: '#64748B', marginTop: 6 }}>
+            Inclusive: entered price already contains GST. Exclusive: GST is added at checkout.
+          </Text>
 
           {/* Available toggle */}
           <View style={styles.toggleRow}>

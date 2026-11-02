@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   Alert, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, Modal, Image, Linking
@@ -22,7 +22,7 @@ const WEEKLY_OFF = ['None','Monday','Tuesday','Wednesday','Thursday','Friday','S
 const RADIUS_OPTIONS = ['1', '2', '3', '4', '5', '6', '10', '15', '20'];
 
 export default function VendorRegisterScreen({ navigation }) {
-  const { login } = useAuth();
+  const { login, loginWithTokens } = useAuth();
   const [step, setStep]             = useState(1);
   const [loading, setLoading]       = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
@@ -44,6 +44,8 @@ export default function VendorRegisterScreen({ navigation }) {
   const [otpConfirm, setOtpConfirm] = useState(null);
   const [showOtpModal, setShowOtpModal] = useState(false);
   const [vendorOtp, setVendorOtp] = useState(['','','','','','']);
+  const registrationBusy = useRef(false);
+  const otpVerified = useRef(false);
 
   const [category,        setCategory]        = useState('restaurant');
   const [categoryConfirmed, setCategoryConfirmed] = useState(false);
@@ -132,13 +134,12 @@ export default function VendorRegisterScreen({ navigation }) {
     Boolean(fssaiCert);
 
   const shopDetailsValid =
-    categoryConfirmed &&
-    deliveryConfirmed &&
     CATEGORIES.some(item => item.id === category) &&
-    ['delivery', 'pickup', 'both'].includes(deliveryType);
+    /^[0-9]{1,3}$/.test(deliveryTime) &&
+    Number(deliveryTime) >= 1 &&
+    Number(deliveryTime) <= 180;
 
   const timingsValid =
-    timingsConfirmed &&
     openTime.trim().length > 0 &&
     closeTime.trim().length > 0 &&
     WEEKLY_OFF.includes(weeklyOff);
@@ -222,69 +223,128 @@ export default function VendorRegisterScreen({ navigation }) {
   };
 
   const handleVerifyAndRegisterShop = async () => {
+    if (registrationBusy.current) return;
+
     const otpCode = vendorOtp.join('');
-    if (otpCode.length !== 6) return Alert.alert('Error', 'Please enter complete OTP');
+    if (!otpVerified.current && otpCode.length !== 6) {
+      return Alert.alert('Error', 'Please enter complete OTP');
+    }
+
+    registrationBusy.current = true;
     setLoading(true);
-    try {
-      await client.post('/users/verify-register-otp/', {
-        phone_number: phone,
-        otp: otpCode,
-        full_name: ownerName,
-        user_type: 'vendor',
-      });
-      await new Promise(resolve => setTimeout(resolve, 500));
-      // Register shop
-      await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // Step 4 — Register shop with delivery_radius
-      const response = await client.post('/vendors/register/', {
-        shop_name:               shopName,
-        category:                category,
-        town:                    town,
-        state:                   state,
-        gstin:                   gstin || '',
-        pan:                     pan || '',
-        fssai_number:            fssai || '',
-        phone_number:            phone,
-        address:                 address || town,
-        latitude:                vendorLat || null,
-        longitude:               vendorLng || null,
-        delivery_type:           deliveryType,
-        estimated_delivery_time: parseInt(deliveryTime),
-        delivery_radius:         parseFloat(deliveryRadius) || 5.0, // ← NEW
-      });
-
-      // Upload FSSAI certificate if provided
-      if (fssaiCert) {
-        try {
-          const formData = new FormData();
-          formData.append('fssai_certificate', {
-            uri: fssaiCert.uri,
-            name: 'fssai_certificate.jpg',
-            type: 'image/jpeg',
-          });
-          await client.patch('/vendors/profile/', formData, {
-            headers: { 'Content-Type': 'multipart/form-data' },
-          });
-        } catch (e) { console.log('FSSAI cert upload error:', e.message); }
+    const checkExistingShop = async () => {
+      try {
+        await client.get('/vendors/myshop/');
+        return 'exists';
+      } catch (error) {
+        if (error.response?.status === 404) return 'missing';
+        return 'unknown';
       }
-      console.log('✅ Vendor registered:', response.data);
+    };
+
+    try {
+      if (!otpVerified.current) {
+        const verifyResponse = await client.post('/users/verify-register-otp/', {
+          phone_number: phone,
+          otp: otpCode,
+          full_name: ownerName,
+          user_type: 'vendor',
+        });
+
+        const { user, tokens } = verifyResponse.data;
+
+        if (!user || !tokens?.access || !tokens?.refresh) {
+          throw new Error('Authentication data missing after OTP verification.');
+        }
+
+        await loginWithTokens(tokens, user);
+        otpVerified.current = true;
+      }
+
+      const existing = await checkExistingShop();
+
+      if (existing === 'unknown') {
+        Alert.alert('Connection Error', 'Unable to check your shop status. Please try again.');
+        return;
+      }
+
+      if (existing === 'exists') {
+        setShowOtpModal(false);
+        Alert.alert(
+          'Shop Already Registered',
+          'Your shop is already registered. You can continue to your seller dashboard.',
+          [{ text: 'Continue', onPress: () => navigation.replace('VendorHome') }]
+        );
+        return;
+      }
+
+      let response;
+
+      try {
+        response = await client.post('/vendors/register/', {
+          shop_name: shopName,
+          category,
+          town,
+          state,
+          gstin: gstin || '',
+          pan: pan || '',
+          fssai_number: fssai || '',
+          phone_number: phone,
+          address: address || town,
+          latitude: vendorLat ?? null,
+          longitude: vendorLng ?? null,
+          delivery_type: deliveryType,
+          estimated_delivery_time: parseInt(deliveryTime, 10),
+          delivery_radius: parseFloat(deliveryRadius) || 5.0,
+        });
+      } catch (error) {
+        const shopStatus = await checkExistingShop();
+
+        if (shopStatus === 'exists') {
+          setShowOtpModal(false);
+          Alert.alert(
+            'Shop Registered',
+            'Your shop has been registered. You can continue to your seller dashboard.',
+            [{ text: 'Continue', onPress: () => navigation.replace('VendorHome') }]
+          );
+          return;
+        }
+
+        if (shopStatus === 'unknown') {
+          Alert.alert(
+            'Registration Status Unclear',
+            'We could not confirm whether your shop was created. Please check your connection and try again.'
+          );
+          return;
+        }
+
+        throw error;
+      }
+
+      console.log('Vendor registered:', response.data);
+      setShowOtpModal(false);
 
       Alert.alert(
-        'Registration Successful! 🎉',
-        'Your shop is now live on Univerin!',
-        [{ text: 'OK', onPress: () => navigation.replace('VendorHome') }]
+        'Registration Submitted',
+        'Your shop registration was successful. Please check your seller dashboard for its approval status.',
+        [{ text: 'Continue', onPress: () => navigation.replace('VendorHome') }]
       );
-    } catch (e) {
-      console.log('❌ Error:', JSON.stringify(e.response?.data));
-      const msg = e.response?.data?.phone_number?.[0]
-        || e.response?.data?.error
-        || e.response?.data?.detail
-        || e.response?.data?.shop_name?.[0]
-        || e.response?.data?.address?.[0]
-        || 'Registration failed. Please try again.';
-      Alert.alert('Error', msg);
+    } catch (error) {
+      console.log('Vendor registration error:', error.response?.data || error.message);
+
+      const msg =
+        error.response?.data?.phone_number?.[0] ||
+        error.response?.data?.error ||
+        error.response?.data?.detail ||
+        error.response?.data?.shop_name?.[0] ||
+        error.response?.data?.address?.[0] ||
+        error.message ||
+        'Registration failed. Please try again.';
+
+      Alert.alert('Registration Error', String(msg));
     } finally {
+      registrationBusy.current = false;
       setLoading(false);
     }
   };
@@ -306,7 +366,7 @@ export default function VendorRegisterScreen({ navigation }) {
 
   // ── Step 1 — Basic Info ──
   const renderStep1 = () => (
-    <ScrollView style={styles.stepContent} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.stepContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
       <Text style={styles.stepTitle}>Basic Information</Text>
       <Text style={styles.stepSubtitle}>Step 1 of 5 — Shop & Owner Details</Text>
       <Progress />
@@ -398,29 +458,13 @@ export default function VendorRegisterScreen({ navigation }) {
       </View>
 
 
-      {town && vendorLat ? (
-        <View style={styles.townDetected}>
-          <View>
-            <Text style={styles.townDetectedText}>📍 {town}</Text>
-            <Text style={styles.townDetectedSub}>GPS: {vendorLat?.toFixed(4)}, {vendorLng?.toFixed(4)}</Text>
-          </View>
-          <TouchableOpacity onPress={() => { setTown(''); setVendorLat(null); setVendorLng(null); }}>
-            <Text style={styles.townClear}>✕</Text>
-          </TouchableOpacity>
-        </View>
-      ) : town ? (
-        <View style={styles.townManual}>
-          <Text style={styles.townManualText}>📍 {town} (entered manually)</Text>
-        </View>
-      ) : null}
-
       <View style={{ height: 20 }} />
     </ScrollView>
   );
 
   // ── Step 2 — Shop Details + Delivery Radius ──
   const renderStep2 = () => (
-    <ScrollView style={styles.stepContent} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.stepContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
       <Text style={styles.stepTitle}>Shop Details</Text>
       <Text style={styles.stepSubtitle}>Step 2 of 5 — Category & Delivery</Text>
       <Progress />
@@ -451,27 +495,13 @@ export default function VendorRegisterScreen({ navigation }) {
         </Text>
       </View>
 
-      <Text style={styles.label}>Delivery Type *</Text>
-      <View style={styles.toggleRow}>
-        {[['delivery','Shop Delivers'],['pickup','Self Pickup'],['both','Both']].map(([val, label]) => (
-          <TouchableOpacity key={val}
-            style={[styles.toggleBtn, deliveryType === val && styles.toggleBtnActive]}
-            onPress={() => { setDeliveryType(val); setDeliveryConfirmed(true); }}>
-            <Text style={[styles.toggleBtnText, deliveryType === val && styles.toggleBtnTextActive]}>
-              {label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <View style={styles.row}>
-        <View style={styles.halfField}>
-          <Text style={styles.label}>Delivery Time (mins)</Text>
+      <Text style={styles.label}>Delivery Time (mins)</Text>
           <TextInput style={[styles.input, { color: '#1669ef', fontWeight: 'bold' }]} placeholder="30" placeholderTextColor="#9CA3AF"
-            value={deliveryTime} editable={false} />
-        </View>
+            value={deliveryTime}
+            onChangeText={(value) => setDeliveryTime(value.replace(/[^0-9]/g, ''))}
+            keyboardType="number-pad"
+            maxLength={3} />
 
-      </View>
 
       {/* ── Delivery Radius ── */}
       <Text style={styles.label}>Delivery Radius</Text>
@@ -487,7 +517,7 @@ export default function VendorRegisterScreen({ navigation }) {
 
   // ── Step 3 — Bank Details ──
   const renderStep3 = () => (
-    <ScrollView style={styles.stepContent} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.stepContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
       <Text style={styles.stepTitle}>Bank Details</Text>
       <Text style={styles.stepSubtitle}>Step 3 of 5 — For weekly settlement</Text>
       <Progress />
@@ -525,7 +555,7 @@ export default function VendorRegisterScreen({ navigation }) {
 
   // ── Step 4 — Timings ──
   const renderStep4 = () => (
-    <ScrollView style={styles.stepContent} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.stepContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
       <Text style={styles.stepTitle}>Shop Timings</Text>
       <Text style={styles.stepSubtitle}>Step 4 of 5 — When are you open?</Text>
       <Progress />
@@ -561,7 +591,7 @@ export default function VendorRegisterScreen({ navigation }) {
 
   // ── Step 5 — Review ──
   const renderStep5 = () => (
-    <ScrollView style={styles.stepContent} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.stepContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
       <Text style={styles.stepTitle}>Review & Submit</Text>
       <Text style={styles.stepSubtitle}>Step 5 of 5 — Check your details</Text>
       <Progress />
@@ -688,27 +718,68 @@ export default function VendorRegisterScreen({ navigation }) {
       </View>
 
       {/* OTP Verification Modal */}
-      <Modal visible={showOtpModal} animationType="slide" transparent>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+      <Modal
+        visible={showOtpModal}
+        animationType="slide"
+        transparent
+        statusBarTranslucent={false}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <View style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            justifyContent: 'flex-end'
+          }}>
           <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 }}>
             <Text style={{ fontSize: 18, fontWeight: '700', color: '#111', marginBottom: 6 }}>Verify Phone Number</Text>
             <Text style={{ fontSize: 13, color: '#888', marginBottom: 20 }}>Enter the 6-digit OTP sent to +91 {phone}</Text>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24, gap: 8 }}>
-              {vendorOtp.map((digit, index) => (
-                <TextInput
-                  key={index}
-                  style={{ width: 46, height: 56, borderRadius: 12, borderWidth: 1.5, borderColor: digit ? '#1669ef' : '#E5E7EB', backgroundColor: digit ? '#eff6ff' : '#F9FAFB', fontSize: 22, fontWeight: '700', color: '#111', textAlign: 'center' }}
-                  value={digit}
-                  onChangeText={val => {
-                    const d = val.replace(/[^0-9]/g, '');
-                    const newOtp = [...vendorOtp];
-                    newOtp[index] = d;
-                    setVendorOtp(newOtp);
-                  }}
-                  keyboardType="numeric"
-                  maxLength={1}
-                />
-              ))}
+            <View style={{ marginBottom: 24 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
+                {vendorOtp.map((digit, index) => (
+                  <View
+                    key={index}
+                    pointerEvents="none"
+                    style={{
+                      flex: 1,
+                      height: 56,
+                      borderRadius: 12,
+                      borderWidth: 1.5,
+                      borderColor: digit ? '#1669ef' : '#E5E7EB',
+                      backgroundColor: digit ? '#eff6ff' : '#F9FAFB',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Text style={{ fontSize: 22, fontWeight: '700', color: '#111' }}>
+                      {digit}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+              <TextInput
+                value={vendorOtp.join('')}
+                onChangeText={val => {
+                  const digits = val.replace(/[^0-9]/g, '').slice(0, 6);
+                  setVendorOtp(Array.from({ length: 6 }, (_, i) => digits[i] || ''));
+                }}
+                keyboardType="number-pad"
+                textContentType="oneTimeCode"
+                autoComplete="sms-otp"
+                maxLength={6}
+                caretHidden
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: 56,
+                  opacity: 0.01,
+                }}
+                accessibilityLabel="Enter six digit verification code"
+              />
             </View>
             <TouchableOpacity
               style={{ backgroundColor: '#1669ef', padding: 16, borderRadius: 14, alignItems: 'center', marginBottom: 12 }}
@@ -721,7 +792,8 @@ export default function VendorRegisterScreen({ navigation }) {
               <Text style={{ textAlign: 'center', color: '#888', fontSize: 14 }}>Cancel</Text>
             </TouchableOpacity>
           </View>
-        </View>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
     </KeyboardAvoidingView>
   );

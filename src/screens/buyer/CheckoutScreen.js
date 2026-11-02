@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View, Text, TouchableOpacity, StyleSheet,
@@ -6,11 +6,17 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import client from '../../api/client';
 import { useCart } from '../../context/CartContext';
 import { globalStore } from '../../utils/globalStore';
 import * as Location from 'expo-location';
 import { useAuth } from '../../context/AuthContext';
+import {
+  prepareCodCheckout,
+  checkCodCheckoutStatus,
+  clearCodCheckout,
+} from '../../utils/codCheckout';
 
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
   if (!lat1 || !lon1 || !lat2 || !lon2) return null;
@@ -52,15 +58,338 @@ export default function CheckoutScreen({ navigation, route }) {
   const [payment, setPayment]           = useState('cod');
   const [addresses, setAddresses]       = useState([]);
   const [selectedAddr, setSelectedAddr] = useState(null);
+  const [deliveryCoords, setDeliveryCoords] = useState(null);
+  const locationRequestId = useRef(0);
+  const geocodeTimer = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (geocodeTimer.current) clearTimeout(geocodeTimer.current);
+    };
+  }, []);
+
+  const setDeliveryLocation = (newAddress, coords = null) => {
+    if (geocodeTimer.current) {
+      clearTimeout(geocodeTimer.current);
+      geocodeTimer.current = null;
+    }
+    locationRequestId.current += 1;
+    setAddress(newAddress);
+    setDeliveryCoords(coords);
+    setCalcDistance(null);
+    setSelectedAddr(null);
+    globalStore.checkoutAddress = null;
+    globalStore.checkoutCoords = null;
+    if (coords && shop?.latitude && shop?.longitude) {
+      setCalcDistance(calculateDistance(
+        coords.lat, coords.lng,
+        Number(shop.latitude), Number(shop.longitude)
+      ));
+    }
+  };
   const [showRazorpay, setShowRazorpay] = useState(false);
   const [razorpayData, setRazorpayData] = useState(null);
   const [placedOrder, setPlacedOrder]   = useState(null);
+  const [pendingPayment, setPendingPayment] = useState(null);
+  const confirmingPaymentRef = useRef(false);
+  const processingRazorpayCallbackRef = useRef(false);
+  const placingOrderRef = useRef(false);
+  const codRecoveryInProgressRef = useRef(false);
+  const pendingPaymentStorageKey = user?.id
+    ? `univerin_pending_payment_${user.id}`
+    : null;
+
+  // Automatic COD checkout recovery
+  useFocusEffect(useCallback(() => {
+    if (!user?.id || codRecoveryInProgressRef.current) {
+      return undefined;
+    }
+
+    let active = true;
+
+    const recoverCodCheckout = async () => {
+      codRecoveryInProgressRef.current = true;
+      setLoading(true);
+
+      try {
+        const result = await checkCodCheckoutStatus(user.id, client);
+
+        if (!active || result.status === 'none') return;
+
+        let order = result.order;
+
+        // If no order exists yet, safely retry the original request.
+        // The original UUID prevents duplicate orders.
+        if (result.status === 'not_found') {
+          const response = await client.post(
+            '/orders/place/',
+            result.pending.payload
+          );
+
+          order = response.data?.order;
+        }
+
+        if (!order?.id) {
+          throw new Error('COD recovery did not return a confirmed order.');
+        }
+
+        if (!active) return;
+
+        try {
+          await clearCodCheckout(
+            user.id,
+            result.pending.client_request_id
+          );
+        } catch (storageError) {
+          console.log('COD recovery cleanup failed:', storageError.message);
+        }
+
+        try {
+          await clearShopCart(
+            result.pending.payload.vendor_id
+          );
+        } catch (cartError) {
+          console.log('Recovered COD order: cart cleanup failed:', cartError.message);
+        }
+
+        if (!active) return;
+
+        navigation.replace('OrderSuccess', {
+          order,
+          calculatedTotal: Number(order.total_amount),
+        });
+
+      } catch (error) {
+        console.log(
+          'COD recovery failed:',
+          error.response?.status,
+          error.response?.data || error.message
+        );
+
+        if (active) {
+          Alert.alert(
+            'COD Order Recovery Pending',
+            'We could not verify your previous order. Your saved checkout has been preserved. Please check again before placing another order.'
+          );
+        }
+      } finally {
+        codRecoveryInProgressRef.current = false;
+
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+
+    recoverCodCheckout();
+
+    return () => {
+      active = false;
+    };
+  }, [user?.id, clearShopCart, navigation]));
+
+
+
+
+
+  const savePendingPayment = async (paymentData, orderData) => {
+    if (!pendingPaymentStorageKey) {
+      throw new Error('Buyer account information is unavailable.');
+    }
+
+    const pending = {
+      razorpay_order_id: paymentData.razorpay_order_id,
+      razorpay_payment_id: paymentData.razorpay_payment_id,
+      razorpay_signature: paymentData.razorpay_signature,
+      order_data: orderData,
+      saved_at: new Date().toISOString(),
+    };
+
+    // Keep an in-memory recovery copy even if device storage fails.
+    setPendingPayment(pending);
+
+    await AsyncStorage.setItem(
+      pendingPaymentStorageKey,
+      JSON.stringify(pending)
+    );
+
+    return pending;
+  };
+
+  const recoverPendingPayment = async (pending, fromConfirmation = false) => {
+    if (confirmingPaymentRef.current && !fromConfirmation) return;
+
+    if (!pending?.razorpay_order_id) {
+      Alert.alert(
+        'Payment Recovery Unavailable',
+        'The saved checkout reference is missing. Please contact support before paying again.'
+      );
+      return;
+    }
+
+    if (!fromConfirmation) {
+      confirmingPaymentRef.current = true;
+    }
+    setLoading(true);
+
+    try {
+      const res = await client.post(
+        '/orders/payment/recover-checkout/',
+        { razorpay_order_id: pending.razorpay_order_id }
+      );
+
+      if (!res.data?.order) {
+        throw new Error('Recovery response does not contain an order.');
+      }
+
+      if (pendingPaymentStorageKey) {
+        try {
+          await AsyncStorage.removeItem(pendingPaymentStorageKey);
+        } catch (storageError) {
+          console.log('Recovery cleanup failed:', storageError.message);
+        }
+      }
+
+      setPendingPayment(null);
+      setShowRazorpay(false);
+      clearShopCart(pending.order_data?.vendor_id || pending.vendor_id);
+
+      navigation.replace('OrderSuccess', {
+        order: res.data.order,
+        calculatedTotal: Number(res.data.order.total_amount),
+      });
+    } catch (error) {
+      console.log(
+        'Payment recovery unsuccessful:',
+        error.response?.status,
+        error.response?.data || error.message
+      );
+
+      Alert.alert(
+        'Payment Status Not Yet Resolved',
+        'We could not safely confirm your previous payment. Please do not pay again. Your checkout information has been preserved. Try checking again later or contact support.'
+      );
+    } finally {
+      if (!fromConfirmation) {
+        confirmingPaymentRef.current = false;
+      }
+      setLoading(false);
+    }
+  };
+
+  const confirmPendingPayment = async (pending) => {
+    if (confirmingPaymentRef.current) return;
+    confirmingPaymentRef.current = true;
+
+    try {
+      const res = await client.post(
+        '/orders/payment/place-after-payment/',
+        {
+          razorpay_order_id: pending.razorpay_order_id,
+          razorpay_payment_id: pending.razorpay_payment_id,
+          razorpay_signature: pending.razorpay_signature,
+          order_data: pending.order_data,
+        }
+      );
+
+      if (!res.data?.order) {
+        throw new Error('Order confirmation response is incomplete.');
+      }
+
+      // Django has confirmed the order. Storage cleanup must not
+      // turn a successful order into a reported payment failure.
+      if (pendingPaymentStorageKey) {
+        try {
+          await AsyncStorage.removeItem(pendingPaymentStorageKey);
+        } catch (storageError) {
+          console.log(
+            'Confirmed order: pending payment cleanup failed:',
+            storageError.message
+          );
+          // Keep the saved record for a safe idempotent retry later.
+        }
+      }
+
+      setPendingPayment(null);
+      setShowRazorpay(false);
+      clearShopCart(pending.order_data.vendor_id);
+
+      navigation.replace('OrderSuccess', {
+        order: res.data.order,
+        calculatedTotal: Number(res.data.order.total_amount),
+      });
+    } catch (error) {
+      console.log('Order confirmation failed:', error.message);
+      setShowRazorpay(false);
+
+      // Keep the shared guard throughout both confirmation attempts.
+      await recoverPendingPayment(pending, true);
+    } finally {
+      confirmingPaymentRef.current = false;
+    }
+  };
+
+  useEffect(() => {
+    if (!pendingPaymentStorageKey) return;
+
+    let active = true;
+
+    const restorePendingPayment = async () => {
+      try {
+        const saved = await AsyncStorage.getItem(pendingPaymentStorageKey);
+        if (!active || !saved) return;
+
+        const pending = JSON.parse(saved);
+
+        const awaitingResult =
+          pending?.status === 'awaiting_payment_result' &&
+          typeof pending.razorpay_order_id === 'string' &&
+          pending.razorpay_order_id.length > 0;
+
+        const awaitingConfirmation =
+          pending?.razorpay_order_id &&
+          pending?.razorpay_payment_id &&
+          pending?.razorpay_signature &&
+          pending?.order_data;
+
+        if (awaitingResult || awaitingConfirmation) {
+          setPendingPayment(pending);
+        } else {
+          Alert.alert(
+            'Payment Recovery Required',
+            'Saved payment information is incomplete. Please contact support before making another payment.'
+          );
+        }
+      } catch (error) {
+        console.log('Unable to restore pending payment:', error.message);
+        Alert.alert(
+          'Payment Recovery Unavailable',
+          'Unable to check for a previous payment. Please do not make another payment until your payment status is confirmed.'
+        );
+      }
+    };
+
+    restorePendingPayment();
+
+    return () => {
+      active = false;
+    };
+  }, [pendingPaymentStorageKey]);
 
   const shopHasGST = !!(shop?.gstin && shop.gstin.trim());
-  const cartItems = products.filter(p => cart[p.id] > 0).map(p => ({
-    ...p, qty: cart[p.id],
-    total: cart[p.id] * parseFloat(p.price) * (shopHasGST ? (1 + (parseFloat(p.gst_percentage) || 0) / 100) : 1),
-  }));
+  const cartItems = products.filter(p => cart[p.id] > 0).map(p => {
+    const qty = cart[p.id];
+    const price = parseFloat(p.price) || 0;
+    const gstRate = parseFloat(p.gst_percentage) || 0;
+    const pricingMode = p.gst_pricing_mode || 'exclusive';
+
+    const baseTotal = Math.round(price * qty * 100) / 100;
+    const total = shopHasGST && pricingMode !== 'inclusive'
+      ? Math.round(baseTotal * (1 + gstRate / 100) * 100) / 100
+      : baseTotal;
+
+    return { ...p, qty, total };
+  });
 
   const subtotal      = cartItems.reduce((sum, item) => sum + item.total, 0);
   const totalMrp      = cartItems.reduce((sum, item) => {
@@ -69,40 +398,56 @@ export default function CheckoutScreen({ navigation, route }) {
     return sum + (mrp > price ? mrp * item.qty : price * item.qty);
   }, 0);
   const totalSavings  = Math.round(totalMrp - subtotal);
-  const deliveryInfo  = getDeliveryInfo(calcDistance !== null ? calcDistance : distance, subtotal, shop?.min_order_value);
+  const deliveryInfo  = getDeliveryInfo(calcDistance, subtotal, shop?.min_order_value);
   const platformFee   = 10;
   const platformFeeGST = parseFloat((platformFee * 1.18).toFixed(1));
   const deliveryFeeGST = deliveryInfo.deliveryFee;
-  const total          = subtotal + deliveryFeeGST + platformFeeGST;
+  const total          = Math.round(subtotal + deliveryFeeGST + platformFeeGST);
 
   useFocusEffect(useCallback(() => {
     if (globalStore.checkoutAddress) {
-      setAddress(globalStore.checkoutAddress);
-      if (globalStore.checkoutCoords && shop?.latitude && shop?.longitude) {
+      const selectedAddress = globalStore.checkoutAddress;
+      const coords = globalStore.checkoutCoords;
+      setDeliveryLocation(selectedAddress, coords || null);
+      if (coords && shop?.latitude && shop?.longitude) {
         const dist = calculateDistance(
-          globalStore.checkoutCoords.lat, globalStore.checkoutCoords.lng,
+          coords.lat, coords.lng,
           parseFloat(shop.latitude), parseFloat(shop.longitude)
         );
         setCalcDistance(dist);
       }
-      // Don't clear globalStore here - keep it so address persists correctly
-      // across screen remounts (tab switches). It only gets cleared when the
-      // user explicitly picks a different address or a new location.
+      // Keep map-selected location available when returning to checkout.
       return;
     }
+    // Refresh saved addresses on focus, but preserve any existing selection.
+    const initialRequestId = locationRequestId.current;
+    let cancelled = false;
+
     const fetchAddresses = async () => {
       try {
         const res = await client.get('/users/addresses/');
         const data = Array.isArray(res.data) ? res.data : [];
+        if (cancelled) return;
         setAddresses(data);
+        if (initialRequestId !== locationRequestId.current ||
+            globalStore.checkoutAddress) return;
+        // Only initialize the default address on the first selection.
+        if (locationRequestId.current !== 0) return;
+
         const defaultAddr = data.find(a => a.is_default);
         if (defaultAddr) {
+          setDeliveryLocation(defaultAddr.full_address);
           setSelectedAddr(defaultAddr);
-          setAddress(defaultAddr.full_address);
           geocodeAndSetDistance(defaultAddr.full_address);
         } else if (globalStore.lastPickedLocation) {
           // No saved address - fall back to last location picked on Home/Map Picker
-          setAddress(globalStore.lastPickedLocation.address);
+          setDeliveryLocation(
+            globalStore.lastPickedLocation.address,
+            {
+              lat: globalStore.lastPickedLocation.lat,
+              lng: globalStore.lastPickedLocation.lng,
+            }
+          );
           if (globalStore.lastPickedLocation.lat && shop?.latitude) {
             const dist = calculateDistance(
               globalStore.lastPickedLocation.lat, globalStore.lastPickedLocation.lng,
@@ -114,25 +459,17 @@ export default function CheckoutScreen({ navigation, route }) {
       } catch (e) { console.log('Address fetch error:', e.message); }
     };
     fetchAddresses();
+    return () => { cancelled = true; };
   }, []));
 
-  useEffect(() => {
-    const getDistance = async () => {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') return;
-        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Low });
-        const { latitude, longitude } = loc.coords;
-        if (shop?.latitude && shop?.longitude) {
-          const dist = calculateDistance(latitude, longitude, parseFloat(shop.latitude), parseFloat(shop.longitude));
-          setCalcDistance(dist);
-        }
-      } catch (e) {}
-    };
-    getDistance();
-  }, []);
+  // Delivery distance is calculated only from the selected delivery address.
 
   const useCurrentLocation = async () => {
+    if (geocodeTimer.current) {
+      clearTimeout(geocodeTimer.current);
+      geocodeTimer.current = null;
+    }
+    const requestId = ++locationRequestId.current;
     setLocatingCurrent(true);
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -141,8 +478,12 @@ export default function CheckoutScreen({ navigation, route }) {
       const { latitude, longitude } = loc.coords;
       const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=AIzaSyCS_YRu6O61LCZn_QlypzjcjSdeRqbQaDI`);
       const data = await res.json();
-      if (data.results?.[0]) {
-        setAddress(data.results[0].formatted_address);
+      if (data.results?.[0] &&
+          requestId === locationRequestId.current) {
+        setDeliveryLocation(
+          data.results[0].formatted_address,
+          { lat: latitude, lng: longitude }
+        );
         if (shop?.latitude && shop?.longitude) {
           const dist = calculateDistance(latitude, longitude, parseFloat(shop.latitude), parseFloat(shop.longitude));
           setCalcDistance(dist);
@@ -153,11 +494,16 @@ export default function CheckoutScreen({ navigation, route }) {
   };
 
   const geocodeAndSetDistance = async (addressText) => {
+    const requestId = ++locationRequestId.current;
+    setDeliveryCoords(null);
+    setCalcDistance(null);
     try {
       const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(addressText)}&key=AIzaSyCS_YRu6O61LCZn_QlypzjcjSdeRqbQaDI`);
       const data = await res.json();
       if (data.results?.[0]) {
         const { lat, lng } = data.results[0].geometry.location;
+        if (requestId !== locationRequestId.current) return;
+        setDeliveryCoords({ lat, lng });
         if (shop?.latitude && shop?.longitude) {
           const dist = calculateDistance(lat, lng, parseFloat(shop.latitude), parseFloat(shop.longitude));
           setCalcDistance(dist);
@@ -167,6 +513,38 @@ export default function CheckoutScreen({ navigation, route }) {
   };
 
   const handlePlaceOrder = async () => {
+    if (placingOrderRef.current) return;
+    placingOrderRef.current = true;
+
+    try {
+    if (payment === 'online') {
+      if (!pendingPaymentStorageKey) {
+        Alert.alert(
+          'Payment Unavailable',
+          'Unable to identify your account. Please sign in again.'
+        );
+        return;
+      }
+
+      try {
+        const saved = await AsyncStorage.getItem(pendingPaymentStorageKey);
+
+        if (saved || pendingPayment || confirmingPaymentRef.current) {
+          Alert.alert(
+            'Previous Payment Pending',
+            'A previous payment may already have succeeded. Please confirm that payment before making another payment.'
+          );
+          return;
+        }
+      } catch (error) {
+        Alert.alert(
+          'Payment Status Unavailable',
+          'Unable to check for a previous payment. Please try again later rather than risk paying twice.'
+        );
+        return;
+      }
+    }
+
     if (deliveryInfo.outOfRange) {
       Alert.alert('Outside Delivery Area', 'Sorry, this shop does not deliver to your location. Maximum delivery range is 6 km.');
       return;
@@ -177,6 +555,19 @@ export default function CheckoutScreen({ navigation, route }) {
     }
     if (!address.trim()) {
       Alert.alert('Error', 'Please enter delivery address');
+      return;
+    }
+    const lat = Number(deliveryCoords?.lat);
+    const lng = Number(deliveryCoords?.lng);
+    if (
+      !deliveryCoords ||
+      !Number.isFinite(lat) || !Number.isFinite(lng) ||
+      lat < -90 || lat > 90 || lng < -180 || lng > 180
+    ) {
+      Alert.alert(
+        'Delivery Location Required',
+        'Please select a valid delivery location before placing your order.'
+      );
       return;
     }
     setLoading(true);
@@ -191,14 +582,80 @@ export default function CheckoutScreen({ navigation, route }) {
       if (payment === 'online') {
         // For online payment: Create Razorpay order FIRST, no Univerin order yet
         const payRes = await client.post('/orders/payment/create-razorpay/', {
-          amount: Math.round(total),
-          shop_name: shop.shop_name,
+          vendor_id: shop.id,
+          items: orderItems.map(({ product_id, variant_id, quantity }) => ({
+            product_id,
+            variant_id,
+            quantity,
+          })),
+          delivery_address: address,
+          delivery_latitude: lat,
+          delivery_longitude: lng,
+          notes: note,
         });
+        // Verify the server-confirmed amount before opening Razorpay.
+        const backendAmountPaise = Number(payRes.data?.amount);
+        const displayedAmountPaise = Math.round(total) * 100;
+
+        if (
+          !Number.isSafeInteger(backendAmountPaise) ||
+          backendAmountPaise <= 0
+        ) {
+          Alert.alert(
+            'Payment Amount Unavailable',
+            'Unable to verify the payment amount. Please try again.'
+          );
+          return;
+        }
+
+        if (backendAmountPaise !== displayedAmountPaise) {
+          Alert.alert(
+            'Order Total Changed',
+            `Your displayed total is ₹${Math.round(total)}, but the verified total is ₹${(backendAmountPaise / 100).toFixed(2)}. Please refresh your cart and review the prices before paying.`
+          );
+          return;
+        }
+
+        // Persist the checkout before opening Razorpay.
+        // A payment may succeed even if the app closes before its callback.
+        if (!pendingPaymentStorageKey) {
+          Alert.alert(
+            'Payment Unavailable',
+            'Unable to save payment recovery information. Please sign in again.'
+          );
+          return;
+        }
+
+        const awaitingPayment = {
+          status: 'awaiting_payment_result',
+          razorpay_order_id: payRes.data.razorpay_order_id,
+          vendor_id: shop.id,
+          amount_paise: backendAmountPaise,
+          saved_at: new Date().toISOString(),
+        };
+
+        try {
+          await AsyncStorage.setItem(
+            pendingPaymentStorageKey,
+            JSON.stringify(awaitingPayment)
+          );
+          setPendingPayment(awaitingPayment);
+        } catch (storageError) {
+          console.log('Unable to save checkout recovery:', storageError.message);
+          Alert.alert(
+            'Payment Unavailable',
+            'Unable to save payment recovery information. Razorpay will not open. Please try again.'
+          );
+          return;
+        }
+
         // Store order data to use after payment
         setPlacedOrder({
           orderItems,
           vendor_id: shop.id,
           delivery_address: address,
+          delivery_latitude: lat,
+          delivery_longitude: lng,
           notes: note,
           delivery_fee: deliveryFeeGST,
           total: Math.round(total),
@@ -212,18 +669,50 @@ export default function CheckoutScreen({ navigation, route }) {
         });
         setShowRazorpay(true);
       } else {
-        // COD: Place order directly
-        const res = await client.post('/orders/place/', {
-          vendor_id:        shop.id,
-          items:            orderItems,
+        // COD: Persist the exact checkout request before submission.
+        if (!user?.id) {
+          throw new Error('Buyer account information is unavailable.');
+        }
+
+        const codPayload = {
+          vendor_id: shop.id,
+          items: orderItems,
           delivery_address: address,
-          payment_mode:     'cod',
-          instructions:     note,
-          delivery_fee:     deliveryFeeGST,
-          total:            Math.round(total),
+          delivery_latitude: lat,
+          delivery_longitude: lng,
+          payment_mode: 'cod',
+          instructions: note,
+          delivery_fee: deliveryFeeGST,
+          total: Math.round(total),
+        };
+
+        const pending = await prepareCodCheckout(user.id, codPayload);
+
+        const res = await client.post(
+          '/orders/place/',
+          pending.payload
+        );
+
+        if (!res.data?.order?.id) {
+          throw new Error('Order confirmation is incomplete.');
+        }
+
+        try {
+          await clearCodCheckout(user.id, pending.client_request_id);
+        } catch (storageError) {
+          console.log('Confirmed COD order: pending cleanup failed:', storageError.message);
+        }
+
+        try {
+          await clearShopCart(shop.id);
+        } catch (cartError) {
+          console.log('Confirmed COD order: cart cleanup failed:', cartError.message);
+        }
+
+        navigation.replace('OrderSuccess', {
+          order: res.data.order,
+          calculatedTotal: Number(res.data.order.total_amount),
         });
-        clearShopCart(shop.id);
-        navigation.replace('OrderSuccess', { order: res.data.order, calculatedTotal: total });
       }
     } catch (e) {
       console.log('ORDER ERROR:', JSON.stringify(e.response?.data), e.message);
@@ -232,37 +721,105 @@ export default function CheckoutScreen({ navigation, route }) {
     } finally {
       setLoading(false);
     }
+    } finally {
+      placingOrderRef.current = false;
+    }
   };
 
   const handleRazorpayResponse = async (data) => {
-    try {
-      if (data.razorpay_payment_id) {
-        // Payment success! Now place the order
-        const res = await client.post('/orders/payment/place-after-payment/', {
-          razorpay_order_id:   data.razorpay_order_id,
-          razorpay_payment_id: data.razorpay_payment_id,
-          razorpay_signature:  data.razorpay_signature,
-          order_data: {
-            vendor_id:        placedOrder.vendor_id,
-            items:            placedOrder.orderItems,
-            delivery_address: placedOrder.delivery_address,
-            notes:            placedOrder.notes,
-            delivery_fee:     placedOrder.delivery_fee,
-            total:            placedOrder.total,
-          },
-        });
-        clearShopCart(shop.id);
-        setShowRazorpay(false);
-        navigation.replace('OrderSuccess', { order: res.data.order, calculatedTotal: total });
-      } else {
-        // Payment failed - no order to cancel
-        setShowRazorpay(false);
-        Alert.alert('Payment Failed', 'Your payment failed. Please try again.');
-      }
-    } catch (e) {
-      console.log('Razorpay response error:', e.message);
+    if (
+      processingRazorpayCallbackRef.current ||
+      confirmingPaymentRef.current
+    ) return;
+
+    // Accept callbacks only for the checkout opened in this session.
+    // A previously saved payment must never be overwritten.
+    if (
+      !pendingPayment ||
+      pendingPayment.status !== 'awaiting_payment_result' ||
+      !razorpayData?.razorpay_order_id ||
+      pendingPayment.razorpay_order_id !== razorpayData.razorpay_order_id
+    ) {
       setShowRazorpay(false);
-      Alert.alert('Error', 'Something went wrong. Please try again.');
+      Alert.alert(
+        'Payment Status Uncertain',
+        'Unable to match this payment to the active checkout. Please do not pay again until its status is verified.'
+      );
+      return;
+    }
+
+    if (
+      data.razorpay_order_id &&
+      data.razorpay_order_id !== pendingPayment.razorpay_order_id
+    ) {
+      setShowRazorpay(false);
+      Alert.alert(
+        'Payment Verification Required',
+        'The payment reference does not match this checkout. Please contact support before trying again.'
+      );
+      return;
+    }
+
+    if (data.razorpay_payment_id) {
+      processingRazorpayCallbackRef.current = true;
+    }
+
+    if (!data.razorpay_payment_id) {
+      setShowRazorpay(false);
+      Alert.alert(
+        'Payment Not Confirmed',
+        'Payment was not confirmed. Please check your payment status before trying again.'
+      );
+      return;
+    }
+
+    if (!placedOrder) {
+      setShowRazorpay(false);
+      Alert.alert(
+        'Payment Confirmation Pending',
+        'Payment details were received, but checkout information is unavailable. Please do not pay again. Contact support.'
+      );
+      return;
+    }
+
+    try {
+      const orderData = {
+        vendor_id: placedOrder.vendor_id,
+        items: placedOrder.orderItems,
+        delivery_address: placedOrder.delivery_address,
+        delivery_latitude: placedOrder.delivery_latitude,
+        delivery_longitude: placedOrder.delivery_longitude,
+        notes: placedOrder.notes,
+        delivery_fee: placedOrder.delivery_fee,
+        total: placedOrder.total,
+      };
+
+      let pending;
+
+      try {
+        pending = await savePendingPayment(data, orderData);
+      } catch (storageError) {
+        console.log('Pending payment storage failed:', storageError.message);
+
+        // Preserve confirmation details for the current app session.
+        pending = {
+          razorpay_order_id: data.razorpay_order_id,
+          razorpay_payment_id: data.razorpay_payment_id,
+          razorpay_signature: data.razorpay_signature,
+          order_data: orderData,
+        };
+
+        setPendingPayment(pending);
+      }
+
+      await confirmPendingPayment(pending);
+    } catch (error) {
+      console.log('Payment callback processing error:', error.message);
+      setShowRazorpay(false);
+      Alert.alert(
+        'Payment Confirmation Pending',
+        'Your payment may have succeeded. Please do not pay again. Retry confirmation or contact support.'
+      );
     }
   };
 
@@ -340,9 +897,10 @@ export default function CheckoutScreen({ navigation, route }) {
         <View style={styles.header}>
           <TouchableOpacity onPress={() => {
             setShowRazorpay(false);
-            Alert.alert('Payment Cancelled', 'Payment was cancelled. No order was placed.', [
-              { text: 'OK', onPress: () => navigation.goBack() }
-            ]);
+            Alert.alert(
+              'Payment Status Uncertain',
+              'The payment window was closed, but payment may still have succeeded. Use Check Payment / Recover Order before trying another online payment.'
+            );
           }} style={styles.backBtn}>
             <Ionicons name="arrow-back" size={22} color="#111" />
           </TouchableOpacity>
@@ -356,9 +914,10 @@ export default function CheckoutScreen({ navigation, route }) {
               const data = JSON.parse(event.nativeEvent.data);
               if (data.cancelled) {
                 setShowRazorpay(false);
-                Alert.alert('Payment Cancelled', 'Payment was cancelled. No order was placed.', [
-                  { text: 'OK', onPress: () => navigation.goBack() }
-                ]);
+                Alert.alert(
+                  'Payment Status Uncertain',
+                  'Razorpay was closed without a confirmed result. Check your existing payment before attempting another online payment.'
+                );
               } else {
                 handleRazorpayResponse(data);
               }
@@ -387,6 +946,60 @@ export default function CheckoutScreen({ navigation, route }) {
 
   return (
     <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
+      {pendingPayment && (
+        <View style={{
+          padding: 16,
+          margin: 12,
+          backgroundColor: '#FFF4D6',
+          borderRadius: 12,
+        }}>
+          <Text style={{
+            fontSize: 15,
+            fontWeight: '700',
+            color: '#754C00',
+            marginBottom: 8,
+          }}>
+            Payment Confirmation Pending
+          </Text>
+          <Text style={{
+            fontSize: 13,
+            color: '#754C00',
+            marginBottom: 12,
+          }}>
+            Your payment may have succeeded. Please confirm your existing payment instead of paying again.
+          </Text>
+          <TouchableOpacity
+            onPress={() => {
+              if (
+                pendingPayment?.razorpay_payment_id &&
+                pendingPayment?.razorpay_signature &&
+                pendingPayment?.order_data
+              ) {
+                confirmPendingPayment(pendingPayment);
+              } else {
+                recoverPendingPayment(pendingPayment);
+              }
+            }}
+            disabled={loading}
+            style={{
+              backgroundColor: '#1669ef',
+              padding: 13,
+              borderRadius: 9,
+              alignItems: 'center',
+            }}
+          >
+            <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>
+              {loading
+                ? 'Checking Previous Payment...'
+                : pendingPayment?.razorpay_payment_id &&
+                  pendingPayment?.razorpay_signature &&
+                  pendingPayment?.order_data
+                  ? 'Retry Order Confirmation'
+                  : 'Check Payment / Recover Order'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
       <View style={[styles.container, { flex: 1 }]}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
@@ -410,7 +1023,11 @@ export default function CheckoutScreen({ navigation, route }) {
                   <TouchableOpacity
                     key={addr.id}
                     style={[styles.addrChip, selectedAddr?.id === addr.id && styles.addrChipActive]}
-                    onPress={() => { setSelectedAddr(addr); setAddress(addr.full_address); geocodeAndSetDistance(addr.full_address); }}
+                    onPress={() => {
+                      setDeliveryLocation(addr.full_address);
+                      setSelectedAddr(addr);
+                      geocodeAndSetDistance(addr.full_address);
+                    }}
                   >
                     <Text style={styles.addrChipIcon}>
                       {addr.label === 'Home' ? '🏠' : addr.label === 'Work' ? '💼' : '📍'}
@@ -440,7 +1057,15 @@ export default function CheckoutScreen({ navigation, route }) {
               placeholder="Enter your full delivery address"
               placeholderTextColor="#9CA3AF"
               value={address}
-              onChangeText={setAddress}
+              onChangeText={(text) => {
+                setDeliveryLocation(text);
+                if (text.trim()) {
+                  geocodeTimer.current = setTimeout(() => {
+                    geocodeTimer.current = null;
+                    geocodeAndSetDistance(text);
+                  }, 700);
+                }
+              }}
               multiline
               numberOfLines={3}
             />
@@ -490,15 +1115,10 @@ export default function CheckoutScreen({ navigation, route }) {
 
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Bill Details</Text>
-            {shopHasGST ? (
+            {shopHasGST && (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
                 <Ionicons name="checkmark-circle" size={14} color="#16A34A" />
                 <Text style={{ fontSize: 12, color: '#16A34A', fontWeight: '600' }}>GST Registered Shop · GSTIN: {shop.gstin}</Text>
-              </View>
-            ) : (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-                <Ionicons name="information-circle-outline" size={14} color="#9CA3AF" />
-                <Text style={{ fontSize: 12, color: '#9CA3AF', fontWeight: '500' }}>This shop is not GST registered</Text>
               </View>
             )}
             <View style={styles.billRow}>

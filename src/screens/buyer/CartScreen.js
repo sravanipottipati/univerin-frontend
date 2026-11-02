@@ -65,7 +65,14 @@ export default function CartScreen({ navigation }) {
   const totalItems  = cartCount;
   const totalAmount = Object.values(carts).reduce((total, shopCart) => {
     return total + shopCart.products.reduce((sum, p) => {
-      return sum + (shopCart.items[p.id] || 0) * parseFloat(p.price);
+      const qty = shopCart.items[p.id] || 0;
+      const price = parseFloat(p.price) || 0;
+      const gstRate = parseFloat(p.gst_percentage) || 0;
+      const baseTotal = Math.round(price * qty * 100) / 100;
+      const hasGST = !!shopCart.shop?.gstin?.trim();
+      return sum + (hasGST && p.gst_pricing_mode !== 'inclusive'
+        ? Math.round(baseTotal * (1 + gstRate / 100) * 100) / 100
+        : baseTotal);
     }, 0);
   }, 0);
 
@@ -103,7 +110,16 @@ export default function CartScreen({ navigation }) {
           const items     = shopCart.items;
           const products  = shopCart.products;
           const itemCount = Object.values(items).reduce((a, b) => a + b, 0);
-          const subtotal  = products.reduce((sum, p) => sum + (items[p.id] || 0) * parseFloat(p.price), 0);
+          const subtotal  = products.reduce((sum, p) => {
+            const qty = items[p.id] || 0;
+            const price = parseFloat(p.price) || 0;
+            const gstRate = parseFloat(p.gst_percentage) || 0;
+            const baseTotal = Math.round(price * qty * 100) / 100;
+            const hasGST = !!shop?.gstin?.trim();
+            return sum + (hasGST && p.gst_pricing_mode !== 'inclusive'
+              ? Math.round(baseTotal * (1 + gstRate / 100) * 100) / 100
+              : baseTotal);
+          }, 0);
           const mov = parseFloat(shop?.min_order_value || 0);
           const isFreeDelivery = mov > 0 && subtotal >= mov;
           const amountLeft = mov > 0 ? Math.max(0, mov - subtotal) : 0;

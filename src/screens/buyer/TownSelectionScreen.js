@@ -21,6 +21,16 @@ export default function TownSelectionScreen({ navigation }) {
   const detectLocation = async () => {
     setDetecting(true);
     try {
+      const enabled = await Location.hasServicesEnabledAsync();
+
+      if (!enabled) {
+        Alert.alert(
+          'Turn On Location',
+          'Please enable location services in your phone settings, then tap Re-detect My Location.'
+        );
+        return;
+      }
+
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         setDetecting(false);
@@ -34,7 +44,7 @@ export default function TownSelectionScreen({ navigation }) {
         const town = place.city || place.subregion || place.region || '';
         const addressParts = [place.name, place.street, place.city, place.region].filter(Boolean);
         const address = addressParts.join(', ') || (latitude + ', ' + longitude);
-        setDetected({ lat: latitude, lng: longitude, address, town });
+        setDetected({ lat: latitude, lng: longitude, address, town, source: 'gps' });
       }
     } catch (e) {
       console.log('Location detection error:', e.message);
@@ -56,7 +66,7 @@ export default function TownSelectionScreen({ navigation }) {
       if (globalStore.townSelectionLocation) {
         const loc = globalStore.townSelectionLocation;
         globalStore.townSelectionLocation = null;
-        setDetected({ lat: loc.lat, lng: loc.lng, address: loc.address, town: loc.town || '' });
+        setDetected({ lat: loc.lat, lng: loc.lng, address: loc.address, town: loc.town || '', source: 'manual' });
       }
     };
     const unsubscribe = navigation.addListener('focus', checkPickedLocation);
@@ -75,10 +85,23 @@ export default function TownSelectionScreen({ navigation }) {
       const updatedUser = { ...user, town };
       await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
       setUser(updatedUser);
-      globalStore.homeLocation = { lat: detected.lat, lng: detected.lng, address: detected.address };
-      globalStore.hasCustomLocation = false;
-      globalStore.lastPickedLocation = null;
-      await AsyncStorage.removeItem('lastPickedLocation');
+      globalStore.homeLocation = {
+        lat: detected.lat,
+        lng: detected.lng,
+        address: detected.address,
+        source: detected.source || 'manual',
+      };
+      globalStore.hasCustomLocation = detected.source === 'manual';
+      globalStore.lastPickedLocation = {
+        lat: detected.lat,
+        lng: detected.lng,
+        address: detected.address,
+        source: detected.source || 'manual',
+      };
+      await AsyncStorage.setItem(
+        'lastPickedLocation',
+        JSON.stringify(globalStore.lastPickedLocation)
+      );
       navigation.replace('Home');
     } catch (e) {
       console.log('Town update error:', e.message);
@@ -86,10 +109,23 @@ export default function TownSelectionScreen({ navigation }) {
       const updatedUser = { ...user, town };
       await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
       setUser(updatedUser);
-      globalStore.homeLocation = { lat: detected.lat, lng: detected.lng, address: detected.address };
-      globalStore.hasCustomLocation = false;
-      globalStore.lastPickedLocation = null;
-      await AsyncStorage.removeItem('lastPickedLocation');
+      globalStore.homeLocation = {
+        lat: detected.lat,
+        lng: detected.lng,
+        address: detected.address,
+        source: detected.source || 'manual',
+      };
+      globalStore.hasCustomLocation = detected.source === 'manual';
+      globalStore.lastPickedLocation = {
+        lat: detected.lat,
+        lng: detected.lng,
+        address: detected.address,
+        source: detected.source || 'manual',
+      };
+      await AsyncStorage.setItem(
+        'lastPickedLocation',
+        JSON.stringify(globalStore.lastPickedLocation)
+      );
       navigation.replace('Home');
     } finally {
       setLoading(false);
