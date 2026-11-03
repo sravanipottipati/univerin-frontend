@@ -449,14 +449,6 @@ ${order.delivery_address}
               </View>
             </View>
           ) : null}
-          <View style={styles.addressBtns}>
-            <TouchableOpacity style={styles.mapsBtn} onPress={handleShareOrder}>
-              <Ionicons name="share-social-outline" size={16} color="#1669ef" /><Text style={styles.mapsBtnText}>Share Order</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.callBtnSmall} onPress={handleCallBuyer}>
-              <Ionicons name="call-outline" size={16} color="#16A34A" /><Text style={styles.callBtnSmallText}>Call Buyer</Text>
-            </TouchableOpacity>
-          </View>
         </View>
 
         <View style={styles.card}>
