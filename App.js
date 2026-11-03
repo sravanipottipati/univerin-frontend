@@ -148,9 +148,9 @@ function AppNavigator() {
         <Stack.Screen name="Home"          component={HomeScreen} />
         <Stack.Screen name="ShopDetail"    component={ShopDetailScreen} />
         <Stack.Screen name="Checkout"      component={CheckoutScreen} />
-        <Stack.Screen name="MyOrders"      component={MyOrdersScreen} />
+        <Stack.Screen name="MyOrders"      component={MyOrdersScreen} options={{ animation: "none" }} />
         <Stack.Screen name="OrderSuccess"  component={OrderSuccessScreen} />
-        <Stack.Screen name="Profile"       component={ProfileScreen} />
+        <Stack.Screen name="Profile"       component={ProfileScreen} options={{ animation: "none" }} />
         <Stack.Screen name="EditProfile"   component={EditProfileScreen} />
         <Stack.Screen name="Notifications" component={NotificationsScreen} />
         <Stack.Screen name="Wishlist"      component={WishlistScreen} />
