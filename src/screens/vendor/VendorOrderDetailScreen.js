@@ -239,7 +239,7 @@ ${order.delivery_address}
 
 🗺️ Map: ${mapsLink}
 ━━━━━━━━━━━━━━━
-💰 Total: Rs.${parseFloat(order.total_amount).toFixed(0)} (COD)`;
+🛍️ Items Total: Rs.${parseFloat(order.subtotal).toFixed(0)}`;
 
     try {
       await Share.share({ message: text, title: `Order #${order.order_number}` });
@@ -386,7 +386,7 @@ ${order.delivery_address}
               <Ionicons name="checkmark-circle" size={28} color="#16A34A" />
               <View>
                 <Text style={[styles.progressTitle, { color: '#16A34A' }]}>Order Delivered!</Text>
-                <Text style={styles.progressSub}>Payment collected: Rs.{total % 1 === 0 ? total.toFixed(0) : total.toFixed(1)}</Text>
+                <Text style={styles.progressSub}>Order items value: Rs.{subtotal.toFixed(2)}</Text>
               </View>
             </View>
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
