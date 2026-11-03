@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import client from './src/api/client';
@@ -203,10 +204,12 @@ function AppNavigator() {
 
 export default function App() {
   return (
-    <AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
       <CartProvider>
         <AppNavigator />
       </CartProvider>
-    </AuthProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }

@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
@@ -8,6 +9,7 @@ import client from '../../api/client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function VendorProductsScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const [products, setProducts]   = useState([]);
   const [search, setSearch]         = useState('');
   const [loading, setLoading]     = useState(true);
@@ -233,7 +235,7 @@ export default function VendorProductsScreen({ navigation }) {
       )}
 
       {/* Bottom Tab */}
-      <View style={styles.bottomTab}>
+      <View style={[styles.bottomTab, { paddingBottom: Math.max(insets.bottom, 24) }]}>
         <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('VendorHome')}>
           <Ionicons name="grid-outline" size={22} color="#9CA3AF" />
           <Text style={styles.tabLabel}>Dashboard</Text>

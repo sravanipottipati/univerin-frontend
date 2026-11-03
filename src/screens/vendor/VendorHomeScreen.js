@@ -5,6 +5,7 @@ import {
   Switch, TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import client from '../../api/client';
@@ -32,6 +33,7 @@ const STATUS_LABELS = {
 };
 
 export default function VendorHomeScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const { user, logout }        = useAuth();
   const [shop, setShop]         = useState(null);
   const [orders, setOrders]     = useState([]);
@@ -338,7 +340,7 @@ export default function VendorHomeScreen({ navigation }) {
       </ScrollView>
 
       {/* Bottom Tab */}
-      <View style={styles.bottomTab}>
+      <View style={[styles.bottomTab, { paddingBottom: Math.max(insets.bottom, 24) }]}>
         <TouchableOpacity style={styles.tabItem}>
           <Ionicons name="grid" size={22} color="#1669ef" />
           <Text style={styles.tabLabelActive}>Dashboard</Text>

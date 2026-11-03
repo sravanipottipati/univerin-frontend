@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
@@ -8,6 +9,7 @@ import { useAuth } from '../../context/AuthContext';
 import client from '../../api/client';
 
 export default function VendorProfileScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const { user, logout } = useAuth();
   const [shop, setShop]   = useState(null);
   const [wallet, setWallet] = useState(null);
@@ -267,7 +269,7 @@ export default function VendorProfileScreen({ navigation }) {
       </ScrollView>
 
       {/* Bottom Tab */}
-      <View style={styles.bottomTab}>
+      <View style={[styles.bottomTab, { paddingBottom: Math.max(insets.bottom, 24) }]}>
         <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('VendorHome')}>
           <Ionicons name="grid-outline" size={22} color="#9CA3AF" />
           <Text style={styles.tabLabel}>Dashboard</Text>

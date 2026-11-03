@@ -4,6 +4,7 @@ import {
   ScrollView, ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import client from '../../api/client';
 
@@ -56,6 +57,7 @@ const getTimeAgo = (dateStr) => {
 };
 
 export default function VendorOrdersScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const [orders, setOrders]         = useState([]);
   const [loading, setLoading]       = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -287,7 +289,7 @@ export default function VendorOrdersScreen({ navigation }) {
       )}
 
       {/* ── Bottom Tab ── */}
-      <View style={styles.bottomTab}>
+      <View style={[styles.bottomTab, { paddingBottom: Math.max(insets.bottom, 24) }]}>
         <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('VendorHome')}>
           <Ionicons name="grid-outline" size={22} color="#9CA3AF" />
           <Text style={styles.tabLabel}>Dashboard</Text>
