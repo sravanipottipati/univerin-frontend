@@ -1,3 +1,4 @@
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import React, { useEffect, useCallback } from 'react';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import {
@@ -11,6 +12,7 @@ import { useCart } from '../../context/CartContext';
 const TEAL = '#1669ef';
 
 export default function CartScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
   const { carts, addToCart, removeFromCart, cartCount, fetchCartFromDb, clearShopCart } = useCart();
 
@@ -41,7 +43,7 @@ export default function CartScreen({ navigation }) {
             <Text style={styles.shopBtnText}>Browse Shops</Text>
           </TouchableOpacity>
         </View>
-        {isFocused && <View style={styles.bottomTab}>
+        {isFocused && <View style={[styles.bottomTab, { paddingBottom: Math.max(insets.bottom, 24) }]}>
           <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('Home')}>
             <Ionicons name="home-outline" size={22} color="#9CA3AF" />
             <Text style={styles.tabLabel}>Home</Text>
@@ -247,7 +249,7 @@ export default function CartScreen({ navigation }) {
       )}
 
       {/* Bottom Tab */}
-      {isFocused && <View style={styles.bottomTab}>
+      {isFocused && <View style={[styles.bottomTab, { paddingBottom: Math.max(insets.bottom, 24) }]}>
         <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('Home')}>
           <Ionicons name="home-outline" size={22} color="#9CA3AF" />
           <Text style={styles.tabLabel}>Home</Text>

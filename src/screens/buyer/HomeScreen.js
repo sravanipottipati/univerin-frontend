@@ -1,3 +1,4 @@
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
@@ -136,6 +137,7 @@ const isCoordInIndia = (lat, lng) =>
   lat >= 6.0 && lat <= 37.0 && lng >= 68.0 && lng <= 97.0;
 
 export default function HomeScreen({ navigation, route }) {
+  const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
   const [shops, setShops]             = useState([]);
   const [loading, setLoading]         = useState(true);
@@ -804,7 +806,7 @@ export default function HomeScreen({ navigation, route }) {
       <ProductDetailModal product={selectedProduct} visible={showProductModal} onClose={() => setShowProductModal(false)} navigation={navigation} />
 
       {/* ── Bottom Tab Bar ── */}
-      {isFocused && <View style={styles.bottomTab}>
+      {isFocused && <View style={[styles.bottomTab, { paddingBottom: Math.max(insets.bottom, 24) }]}>
         <TabItem iconOutline="home-outline"    iconFilled="home"    label="Home"    active={true}  onPress={() => {}} />
         <TabItem iconOutline="cart-outline"    iconFilled="cart"    label="Cart"    active={false} badge={cartCount}
           onPress={() => {

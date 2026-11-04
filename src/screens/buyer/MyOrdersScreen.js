@@ -1,3 +1,4 @@
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import React, { useState, useEffect } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useIsFocused } from '@react-navigation/native';
@@ -39,6 +40,7 @@ const STATUS_EMOJI = {
 };
 
 export default function MyOrdersScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
   const [orders, setOrders]         = useState([]);
   const [loading, setLoading]       = useState(true);
@@ -274,7 +276,7 @@ export default function MyOrdersScreen({ navigation }) {
       )}
 
       {/* Bottom Tab */}
-      {isFocused && <View style={styles.bottomTab}>
+      {isFocused && <View style={[styles.bottomTab, { paddingBottom: Math.max(insets.bottom, 24) }]}>
         <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('Home')}>
           <Ionicons name="home-outline" size={25} color="#9CA3AF" />
           <Text style={styles.tabLabel}>Home</Text>
