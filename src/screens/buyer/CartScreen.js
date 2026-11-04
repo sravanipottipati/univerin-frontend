@@ -1,5 +1,5 @@
 import React, { useEffect, useCallback } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import {
   View, Text, TouchableOpacity, StyleSheet,
   ScrollView, Image, Alert,
@@ -11,6 +11,7 @@ import { useCart } from '../../context/CartContext';
 const TEAL = '#1669ef';
 
 export default function CartScreen({ navigation }) {
+  const isFocused = useIsFocused();
   const { carts, addToCart, removeFromCart, cartCount, fetchCartFromDb, clearShopCart } = useCart();
 
   useFocusEffect(
@@ -40,7 +41,7 @@ export default function CartScreen({ navigation }) {
             <Text style={styles.shopBtnText}>Browse Shops</Text>
           </TouchableOpacity>
         </View>
-        <View style={styles.bottomTab}>
+        {isFocused && <View style={styles.bottomTab}>
           <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('Home')}>
             <Ionicons name="home-outline" size={22} color="#9CA3AF" />
             <Text style={styles.tabLabel}>Home</Text>
@@ -57,7 +58,7 @@ export default function CartScreen({ navigation }) {
             <Ionicons name="person-outline" size={22} color="#9CA3AF" />
             <Text style={styles.tabLabel}>Profile</Text>
           </TouchableOpacity>
-        </View>
+        </View>}
       </View>
     );
   }
@@ -246,7 +247,7 @@ export default function CartScreen({ navigation }) {
       )}
 
       {/* Bottom Tab */}
-      <View style={styles.bottomTab}>
+      {isFocused && <View style={styles.bottomTab}>
         <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('Home')}>
           <Ionicons name="home-outline" size={22} color="#9CA3AF" />
           <Text style={styles.tabLabel}>Home</Text>
@@ -270,7 +271,7 @@ export default function CartScreen({ navigation }) {
           <Ionicons name="person-outline" size={22} color="#9CA3AF" />
           <Text style={styles.tabLabel}>Profile</Text>
         </TouchableOpacity>
-      </View>
+      </View>}
 
     </View>
   );

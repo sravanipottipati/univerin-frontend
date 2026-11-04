@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Ionicons } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
 import {
   View, Text, TouchableOpacity, StyleSheet,
   ScrollView, ActivityIndicator, RefreshControl, Alert,
@@ -38,6 +39,7 @@ const STATUS_EMOJI = {
 };
 
 export default function MyOrdersScreen({ navigation }) {
+  const isFocused = useIsFocused();
   const [orders, setOrders]         = useState([]);
   const [loading, setLoading]       = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -272,7 +274,7 @@ export default function MyOrdersScreen({ navigation }) {
       )}
 
       {/* Bottom Tab */}
-      <View style={styles.bottomTab}>
+      {isFocused && <View style={styles.bottomTab}>
         <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('Home')}>
           <Ionicons name="home-outline" size={25} color="#9CA3AF" />
           <Text style={styles.tabLabel}>Home</Text>
@@ -289,7 +291,7 @@ export default function MyOrdersScreen({ navigation }) {
           <Ionicons name="person-outline" size={25} color="#9CA3AF" />
           <Text style={styles.tabLabel}>Profile</Text>
         </TouchableOpacity>
-      </View>
+      </View>}
 
     </View>
   );

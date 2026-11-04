@@ -4,7 +4,7 @@ import {
   ScrollView, RefreshControl, Image,
   Dimensions, FlatList, Alert, Platform, Linking,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
@@ -136,6 +136,7 @@ const isCoordInIndia = (lat, lng) =>
   lat >= 6.0 && lat <= 37.0 && lng >= 68.0 && lng <= 97.0;
 
 export default function HomeScreen({ navigation, route }) {
+  const isFocused = useIsFocused();
   const [shops, setShops]             = useState([]);
   const [loading, setLoading]         = useState(true);
   const [refreshing, setRefreshing]   = useState(false);
@@ -803,7 +804,7 @@ export default function HomeScreen({ navigation, route }) {
       <ProductDetailModal product={selectedProduct} visible={showProductModal} onClose={() => setShowProductModal(false)} navigation={navigation} />
 
       {/* ── Bottom Tab Bar ── */}
-      <View style={styles.bottomTab}>
+      {isFocused && <View style={styles.bottomTab}>
         <TabItem iconOutline="home-outline"    iconFilled="home"    label="Home"    active={true}  onPress={() => {}} />
         <TabItem iconOutline="cart-outline"    iconFilled="cart"    label="Cart"    active={false} badge={cartCount}
           onPress={() => {
@@ -812,7 +813,7 @@ export default function HomeScreen({ navigation, route }) {
         />
         <TabItem iconOutline="receipt-outline" iconFilled="receipt" label="Orders"  active={false} onPress={() => navigation.navigate('MyOrders')} />
         <TabItem iconOutline="person-outline"  iconFilled="person"  label="Profile" active={false} onPress={() => navigation.navigate('Profile')} />
-      </View>
+      </View>}
 
     </View>
   );
