@@ -42,6 +42,7 @@ async function registerForPushNotificationsAsync() {
 }
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import BuyerTabNavigator from './src/navigation/BuyerTabNavigator';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { CartProvider } from './src/context/CartContext';
 import { ActivityIndicator, View, Platform } from 'react-native';
@@ -130,7 +131,7 @@ function AppNavigator() {
     if (user.user_type === 'vendor') return 'VendorHome';
     if (user.user_type === 'delivery_partner') return 'DPHome';
     if (user.user_type === 'buyer' && !user.town) return 'TownSelection';
-    return 'Home';
+    return 'BuyerTabs';
   };
 
   return (
@@ -146,18 +147,15 @@ function AppNavigator() {
         <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
 
         {/* ── Buyer ── */}
-        <Stack.Screen name="Home"          component={HomeScreen} />
+        <Stack.Screen name="BuyerTabs" component={BuyerTabNavigator} options={{ animation: "none" }} />
         <Stack.Screen name="ShopDetail"    component={ShopDetailScreen} />
         <Stack.Screen name="Checkout"      component={CheckoutScreen} />
-        <Stack.Screen name="MyOrders"      component={MyOrdersScreen} options={{ animation: "none" }} />
         <Stack.Screen name="OrderSuccess"  component={OrderSuccessScreen} />
-        <Stack.Screen name="Profile"       component={ProfileScreen} options={{ animation: "none" }} />
         <Stack.Screen name="EditProfile"   component={EditProfileScreen} />
         <Stack.Screen name="Notifications" component={NotificationsScreen} />
         <Stack.Screen name="Wishlist"      component={WishlistScreen} />
         <Stack.Screen name="Address"       component={AddressScreen} options={{ animation: "slide_from_right", tabBarVisible: false }} />
         <Stack.Screen name="HelpSupport"   component={HelpSupportScreen} />
-        <Stack.Screen name="Cart" component={CartScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Search"        component={SearchScreen} />
         <Stack.Screen name="OrderDetail"   component={OrderDetailScreen} />
         <Stack.Screen name="TownSelection" component={TownSelectionScreen} />

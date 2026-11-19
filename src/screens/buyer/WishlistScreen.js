@@ -65,7 +65,7 @@ export default function WishlistScreen({ navigation }) {
     };
     addToCart(product, shop);
     Alert.alert('Added! 🛒', `${item.name} added to cart`, [
-      { text: 'View Cart', onPress: () => navigation.navigate('Cart') },
+      { text: 'View Cart', onPress: () => navigation.navigate('BuyerTabs', { screen: 'Cart' }) },
       { text: 'OK', style: 'cancel' },
     ]);
   };
@@ -98,7 +98,7 @@ export default function WishlistScreen({ navigation }) {
               <Text style={styles.emptySubtitle}>
                 Save products you love by tapping ♡ on any product
               </Text>
-              <TouchableOpacity style={styles.shopBtn} onPress={() => navigation.navigate('Home')}>
+              <TouchableOpacity style={styles.shopBtn} onPress={() => navigation.navigate('BuyerTabs', { screen: 'Home' })}>
                 <Text style={styles.shopBtnText}>Browse Shops</Text>
               </TouchableOpacity>
             </View>
@@ -181,19 +181,19 @@ export default function WishlistScreen({ navigation }) {
       )}
       {/* Bottom Tab */}
       <View style={{ flexDirection: 'row', backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#F0F0F0', paddingBottom: 20, paddingTop: 10, position: 'absolute', bottom: 0, left: 0, right: 0 }}>
-        <TouchableOpacity style={{ flex: 1, alignItems: 'center' }} onPress={() => navigation.navigate('Home')}>
+        <TouchableOpacity style={{ flex: 1, alignItems: 'center' }} onPress={() => navigation.navigate('BuyerTabs', { screen: 'Home' })}>
           <Ionicons name="home-outline" size={25} color="#9CA3AF" />
           <Text style={{ fontSize: 11, color: '#9CA3AF' }}>Home</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={{ flex: 1, alignItems: 'center' }} onPress={() => navigation.navigate('Cart')}>
+        <TouchableOpacity style={{ flex: 1, alignItems: 'center' }} onPress={() => navigation.navigate('BuyerTabs', { screen: 'Cart' })}>
           <Ionicons name="cart-outline" size={25} color="#9CA3AF" />
           <Text style={{ fontSize: 11, color: '#9CA3AF' }}>Cart</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={{ flex: 1, alignItems: 'center' }} onPress={() => navigation.navigate('MyOrders')}>
+        <TouchableOpacity style={{ flex: 1, alignItems: 'center' }} onPress={() => navigation.navigate('BuyerTabs', { screen: 'MyOrders' })}>
           <Ionicons name="receipt-outline" size={25} color="#9CA3AF" />
           <Text style={{ fontSize: 11, color: '#9CA3AF' }}>Orders</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={{ flex: 1, alignItems: 'center' }} onPress={() => navigation.navigate('Profile')}>
+        <TouchableOpacity style={{ flex: 1, alignItems: 'center' }} onPress={() => navigation.navigate('BuyerTabs', { screen: 'Profile' })}>
           <Ionicons name="person-outline" size={25} color="#9CA3AF" />
           <Text style={{ fontSize: 11, color: '#9CA3AF' }}>Profile</Text>
         </TouchableOpacity>

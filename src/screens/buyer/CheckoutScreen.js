@@ -660,8 +660,6 @@ export default function CheckoutScreen({ navigation, route }) {
           delivery_fee: deliveryFeeGST,
           total: Math.round(total),
         });
-        console.log('USER OBJECT:', JSON.stringify(user));
-        console.log('PREFILL CONTACT:', user?.phone_number);
         setRazorpayData({
           ...payRes.data,
           prefill_contact: user?.phone_number || '',
@@ -825,7 +823,6 @@ export default function CheckoutScreen({ navigation, route }) {
 
   const getRazorpayHTML = () => {
     if (!razorpayData) return '';
-    console.log('RAZORPAY DATA:', JSON.stringify(razorpayData));
     return `<!DOCTYPE html>
 <html>
 <head>

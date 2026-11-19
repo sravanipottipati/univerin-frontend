@@ -33,7 +33,7 @@ export default function VendorProfileScreen({ navigation }) {
   const handleDeleteAccount = () => {
     Alert.alert(
       'Delete Account',
-      'Are you sure you want to delete your seller account? This action cannot be undone. We will process your request within 24 hours.',
+      'Are you sure you want to request deletion of your seller account? Your request will be reviewed. Certain records may be retained where legally required.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -42,7 +42,7 @@ export default function VendorProfileScreen({ navigation }) {
           onPress: async () => {
             try {
               await client.post('/users/delete-account-request/');
-              Alert.alert('Request Submitted', 'Your account deletion request has been submitted. We will delete your account within 24 hours.');
+              Alert.alert('Request Submitted', 'Your account deletion request has been received. You can continue using your account while it is pending. Your request will be reviewed, and some records may need to be retained for legal or operational reasons.');
             } catch (e) {
               Alert.alert('Error', 'Failed to submit request. Please email contact@univerin.in');
             }

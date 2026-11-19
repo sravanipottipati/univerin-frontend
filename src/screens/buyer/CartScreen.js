@@ -43,24 +43,7 @@ export default function CartScreen({ navigation }) {
             <Text style={styles.shopBtnText}>Browse Shops</Text>
           </TouchableOpacity>
         </View>
-        {isFocused && <View style={[styles.bottomTab, { paddingBottom: Math.max(insets.bottom, 24) }]}>
-          <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('Home')}>
-            <Ionicons name="home-outline" size={22} color="#9CA3AF" />
-            <Text style={styles.tabLabel}>Home</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.tabItem}>
-            <Ionicons name="cart" size={22} color={TEAL} />
-            <Text style={styles.tabLabelActive}>Cart</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('MyOrders')}>
-            <Ionicons name="receipt-outline" size={22} color="#9CA3AF" />
-            <Text style={styles.tabLabel}>Orders</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('Profile')}>
-            <Ionicons name="person-outline" size={22} color="#9CA3AF" />
-            <Text style={styles.tabLabel}>Profile</Text>
-          </TouchableOpacity>
-        </View>}
+
       </View>
     );
   }
@@ -249,31 +232,7 @@ export default function CartScreen({ navigation }) {
       )}
 
       {/* Bottom Tab */}
-      {isFocused && <View style={[styles.bottomTab, { paddingBottom: Math.max(insets.bottom, 24) }]}>
-        <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('Home')}>
-          <Ionicons name="home-outline" size={22} color="#9CA3AF" />
-          <Text style={styles.tabLabel}>Home</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem}>
-          <View style={{ position: 'relative' }}>
-            <Ionicons name="cart" size={22} color={TEAL} />
-            {cartCount > 0 && (
-              <View style={styles.cartTabBadge}>
-                <Text style={styles.cartTabBadgeText}>{cartCount > 99 ? '99+' : cartCount}</Text>
-              </View>
-            )}
-          </View>
-          <Text style={styles.tabLabelActive}>Cart</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('MyOrders')}>
-          <Ionicons name="receipt-outline" size={22} color="#9CA3AF" />
-          <Text style={styles.tabLabel}>Orders</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('Profile')}>
-          <Ionicons name="person-outline" size={22} color="#9CA3AF" />
-          <Text style={styles.tabLabel}>Profile</Text>
-        </TouchableOpacity>
-      </View>}
+
 
     </View>
   );

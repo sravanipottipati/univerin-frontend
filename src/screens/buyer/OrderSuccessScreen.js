@@ -151,7 +151,7 @@ export default function OrderSuccessScreen({ navigation, route }) {
 
         <TouchableOpacity
           style={styles.homeBtn}
-          onPress={() => navigation.navigate('Home')}
+          onPress={() => navigation.navigate('BuyerTabs', { screen: 'Home' })}
         >
           <Ionicons name="home-outline" size={18} color="#1669ef" />
           <Text style={styles.homeBtnText}>Back to Home</Text>
@@ -161,19 +161,19 @@ export default function OrderSuccessScreen({ navigation, route }) {
       </ScrollView>
 
       <View style={styles.bottomTab}>
-        <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('Home')}>
+        <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('BuyerTabs', { screen: 'Home' })}>
           <Ionicons name="home-outline" size={22} color="#9CA3AF" />
           <Text style={styles.tabLabel}>Home</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('Cart')}>
+        <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('BuyerTabs', { screen: 'Cart' })}>
           <Ionicons name="cart-outline" size={22} color="#9CA3AF" />
           <Text style={styles.tabLabel}>Cart</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('MyOrders')}>
+        <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('BuyerTabs', { screen: 'MyOrders' })}>
           <Ionicons name="receipt" size={22} color="#1669ef" />
           <Text style={styles.tabLabelActive}>Orders</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('Profile')}>
+        <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('BuyerTabs', { screen: 'Profile' })}>
           <Ionicons name="person-outline" size={22} color="#9CA3AF" />
           <Text style={styles.tabLabel}>Profile</Text>
         </TouchableOpacity>

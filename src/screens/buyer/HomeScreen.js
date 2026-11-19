@@ -806,16 +806,7 @@ export default function HomeScreen({ navigation, route }) {
       <ProductDetailModal product={selectedProduct} visible={showProductModal} onClose={() => setShowProductModal(false)} navigation={navigation} />
 
       {/* ── Bottom Tab Bar ── */}
-      {isFocused && <View style={[styles.bottomTab, { paddingBottom: Math.max(insets.bottom, 24) }]}>
-        <TabItem iconOutline="home-outline"    iconFilled="home"    label="Home"    active={true}  onPress={() => {}} />
-        <TabItem iconOutline="cart-outline"    iconFilled="cart"    label="Cart"    active={false} badge={cartCount}
-          onPress={() => {
-            navigation.navigate('Cart');
-          }}
-        />
-        <TabItem iconOutline="receipt-outline" iconFilled="receipt" label="Orders"  active={false} onPress={() => navigation.navigate('MyOrders')} />
-        <TabItem iconOutline="person-outline"  iconFilled="person"  label="Profile" active={false} onPress={() => navigation.navigate('Profile')} />
-      </View>}
+
 
     </View>
   );

@@ -6,6 +6,34 @@ import {
 import client from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 
+// Convert API failures into useful, user-friendly messages.
+function getOtpErrorMessage(error, fallback) {
+  const data = error.response?.data;
+
+  const serverMessage =
+    data?.error ||
+    data?.detail ||
+    data?.message;
+
+  if (typeof serverMessage === 'string' && serverMessage.trim()) {
+    return serverMessage;
+  }
+
+  if (error.code === 'ECONNABORTED') {
+    return 'Request timed out. Please check your internet connection and try again.';
+  }
+
+  if (!error.response) {
+    return 'Unable to connect to the server. Please check your internet connection.';
+  }
+
+  if (error.response.status >= 500) {
+    return 'The server is temporarily unavailable. Please try again shortly.';
+  }
+
+  return fallback;
+}
+
 export default function LoginScreen({ navigation }) {
   const [phone, setPhone]         = useState('');
   const [otp, setOtp]             = useState(['', '', '', '', '', '']);
@@ -38,8 +66,11 @@ export default function LoginScreen({ navigation }) {
       startTimer();
       setTimeout(() => otpInputRef.current?.focus(), 300);
     } catch (e) {
-      const msg = e.response?.data?.error || 'Failed to send OTP. Please try again.';
-      Alert.alert('Error', msg);
+      console.warn('[OTP] Send failed:', e.response?.status ?? e.code ?? 'network');
+      Alert.alert(
+        'Error',
+        getOtpErrorMessage(e, 'Failed to send OTP. Please try again.')
+      );
     } finally {
       setLoading(false);
     }
@@ -82,11 +113,14 @@ export default function LoginScreen({ navigation }) {
       } else if (!res.data.user.town) {
         navigation.replace('TownSelection');
       } else {
-        navigation.replace('Home');
+        navigation.replace('BuyerTabs', { screen: 'Home' });
       }
     } catch (e) {
-      const msg = e.response?.data?.error || 'Incorrect OTP. Please try again.';
-      Alert.alert('Error', msg);
+      console.warn('[OTP] Verification failed:', e.response?.status ?? e.code ?? 'network');
+      Alert.alert(
+        'Error',
+        getOtpErrorMessage(e, 'Incorrect OTP. Please try again.')
+      );
     } finally {
       setLoading(false);
     }
@@ -102,7 +136,11 @@ export default function LoginScreen({ navigation }) {
       startTimer();
       setTimeout(() => otpInputRef.current?.focus(), 300);
     } catch (e) {
-      Alert.alert('Error', 'Failed to resend OTP. Please try again.');
+      console.warn('[OTP] Resend failed:', e.response?.status ?? e.code ?? 'network');
+      Alert.alert(
+        'Error',
+        getOtpErrorMessage(e, 'Failed to resend OTP. Please try again.')
+      );
     } finally {
       setLoading(false);
     }

@@ -40,6 +40,34 @@ export default function DPProfileScreen({ navigation }) {
     })();
   }, []);
 
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Request Account Deletion',
+      'Are you sure you want to request deletion of your delivery partner account? Your request will be reviewed. Certain records may be retained where legally required.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Request Deletion',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await client.post('/users/delete-account-request/');
+              Alert.alert(
+                'Request Submitted',
+                'Your account deletion request has been received. You can continue using your account while it is pending. Your request will be reviewed, and some records may need to be retained for legal or operational reasons.'
+              );
+            } catch (error) {
+              Alert.alert(
+                'Request Failed',
+                'Unable to submit your request. Please contact contact@univerin.in.'
+              );
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleLogout = () => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
       { text: 'Cancel', style: 'cancel' },
@@ -130,6 +158,13 @@ export default function DPProfileScreen({ navigation }) {
       <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
         <Text style={styles.logoutText}>Logout</Text>
       </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.deleteAccountBtn}
+        onPress={handleDeleteAccount}
+      >
+        <Text style={styles.deleteAccountText}>Delete Account</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }
@@ -173,4 +208,17 @@ const styles = StyleSheet.create({
     paddingVertical: 13, alignItems: 'center', marginBottom: 20,
   },
   logoutText: { color: '#1669ef', fontSize: 15, fontWeight: '700' },
+  deleteAccountBtn: {
+    borderWidth: 1,
+    borderColor: '#ef4444',
+    borderRadius: 10,
+    paddingVertical: 13,
+    alignItems: 'center',
+    marginBottom: 30,
+  },
+  deleteAccountText: {
+    color: '#ef4444',
+    fontSize: 15,
+    fontWeight: '700',
+  },
 });

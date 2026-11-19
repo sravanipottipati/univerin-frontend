@@ -276,24 +276,7 @@ export default function MyOrdersScreen({ navigation }) {
       )}
 
       {/* Bottom Tab */}
-      {isFocused && <View style={[styles.bottomTab, { paddingBottom: Math.max(insets.bottom, 24) }]}>
-        <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('Home')}>
-          <Ionicons name="home-outline" size={25} color="#9CA3AF" />
-          <Text style={styles.tabLabel}>Home</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('Cart')}>
-          <Ionicons name="cart-outline" size={25} color="#9CA3AF" />
-          <Text style={styles.tabLabel}>Cart</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem}>
-          <Ionicons name="receipt" size={25} color="#1669ef" />
-          <Text style={styles.tabLabelActive}>Orders</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('Profile')}>
-          <Ionicons name="person-outline" size={25} color="#9CA3AF" />
-          <Text style={styles.tabLabel}>Profile</Text>
-        </TouchableOpacity>
-      </View>}
+
 
     </View>
   );

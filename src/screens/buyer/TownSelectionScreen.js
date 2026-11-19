@@ -102,7 +102,7 @@ export default function TownSelectionScreen({ navigation }) {
         'lastPickedLocation',
         JSON.stringify(globalStore.lastPickedLocation)
       );
-      navigation.replace('Home');
+      navigation.replace('BuyerTabs', { screen: 'Home' });
     } catch (e) {
       console.log('Town update error:', e.message);
       const town = detected.town || 'Unknown';
@@ -126,7 +126,7 @@ export default function TownSelectionScreen({ navigation }) {
         'lastPickedLocation',
         JSON.stringify(globalStore.lastPickedLocation)
       );
-      navigation.replace('Home');
+      navigation.replace('BuyerTabs', { screen: 'Home' });
     } finally {
       setLoading(false);
     }

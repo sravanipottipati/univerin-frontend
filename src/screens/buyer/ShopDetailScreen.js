@@ -613,7 +613,7 @@ export default function ShopDetailScreen({ navigation, route }) {
       {/* Cart Footer */}
       {shopCartCount > 0 && (
         <TouchableOpacity style={[styles.cartFooter, { backgroundColor: shopColor }]}
-          onPress={() => navigation.navigate('Cart')}>
+          onPress={() => navigation.navigate('BuyerTabs', { screen: 'Cart' })}>
           <View style={styles.cartFooterLeft}>
             <View style={styles.cartCountBadge}>
               <Text style={styles.cartCountText}>{shopCartCount}</Text>
@@ -629,11 +629,11 @@ export default function ShopDetailScreen({ navigation, route }) {
 
       {/* Bottom Tab */}
       <View style={styles.bottomTab}>
-        <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('Home')}>
+        <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('BuyerTabs', { screen: 'Home' })}>
           <Ionicons name="home-outline" size={22} color="#9CA3AF" />
           <Text style={styles.tabLabel}>Home</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('Cart')}>
+        <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('BuyerTabs', { screen: 'Cart' })}>
           <View style={{ position: 'relative' }}>
             <Ionicons name={cartCount > 0 ? 'cart' : 'cart-outline'} size={22} color={cartCount > 0 ? '#1669ef' : '#9CA3AF'} />
             {cartCount > 0 && (
@@ -644,11 +644,11 @@ export default function ShopDetailScreen({ navigation, route }) {
           </View>
           <Text style={[styles.tabLabel, cartCount > 0 && { color: '#1669ef' }]}>Cart</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('MyOrders')}>
+        <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('BuyerTabs', { screen: 'MyOrders' })}>
           <Ionicons name="receipt-outline" size={22} color="#9CA3AF" />
           <Text style={styles.tabLabel}>Orders</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('Profile')}>
+        <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('BuyerTabs', { screen: 'Profile' })}>
           <Ionicons name="person-outline" size={22} color="#9CA3AF" />
           <Text style={styles.tabLabel}>Profile</Text>
         </TouchableOpacity>

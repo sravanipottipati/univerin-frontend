@@ -12,10 +12,59 @@ export const AuthProvider = ({ children }) => {
 
   const loadUser = async () => {
     try {
-      const userData = await AsyncStorage.getItem('user');
-      if (userData) setUser(JSON.parse(userData));
+      const [userData, accessToken, refreshToken] = await Promise.all([
+        AsyncStorage.getItem('user'),
+        AsyncStorage.getItem('access_token'),
+        AsyncStorage.getItem('refresh_token'),
+      ]);
+
+      if (!userData || (!accessToken && !refreshToken)) {
+        await AsyncStorage.multiRemove([
+          'user',
+          'access_token',
+          'refresh_token',
+        ]);
+        setUser(null);
+        return;
+      }
+
+      try {
+        const response = await client.get('/users/profile/');
+        const currentUser = response.data;
+
+        if (currentUser.is_active === false) {
+          await AsyncStorage.multiRemove([
+            'user',
+            'access_token',
+            'refresh_token',
+          ]);
+          setUser(null);
+          return;
+        }
+
+        await AsyncStorage.setItem('user', JSON.stringify(currentUser));
+        setUser(currentUser);
+      } catch (error) {
+        const status = error.response?.status;
+
+        if (status === 401 || status === 403) {
+          await AsyncStorage.multiRemove([
+            'user',
+            'access_token',
+            'refresh_token',
+          ]);
+          setUser(null);
+        } else {
+          console.warn(
+            '[AUTH] Unable to validate saved session:',
+            error.message
+          );
+          setUser(null);
+        }
+      }
     } catch (e) {
-      console.log('Error loading user', e);
+      console.error('[AUTH] Session restoration failed:', e);
+      setUser(null);
     } finally {
       setLoading(false);
     }

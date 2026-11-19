@@ -30,7 +30,7 @@ export default function ProfileScreen({ navigation }) {
   const handleDeleteAccount = () => {
     Alert.alert(
       'Delete Account',
-      'Are you sure you want to delete your account? This action cannot be undone.',
+      'Are you sure you want to request account deletion? Your request will be reviewed. Certain records may be retained where legally required.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -38,11 +38,41 @@ export default function ProfileScreen({ navigation }) {
           style: 'destructive',
           onPress: async () => {
             try {
-              await client.post('/users/delete-account-request/');
-              await logout();
+              const response = await client.post('/users/delete-account-request/');
+              console.log('[ACCOUNT DELETE] API succeeded:', response.status);
             } catch (e) {
-              Alert.alert('Error', 'Failed to delete account. Please email contact@univerin.in');
+              console.error('[ACCOUNT DELETE] API failed:', {
+                status: e.response?.status ?? null,
+                error: e.response?.data?.error ?? null,
+                code: e.code ?? null,
+              });
+              const status = e.response?.status;
+
+              let message =
+                'Unable to process your request. Please email contact@univerin.in.';
+
+              if (status === 401) {
+                message =
+                  'Your session has expired. Please log in again and retry.';
+              } else if (status === 403) {
+                message =
+                  'Account deletion is unavailable for this account. Please contact contact@univerin.in.';
+              } else if (status === 500) {
+                message =
+                  'The server could not process your request. Please try again later.';
+              } else if (!e.response) {
+                message =
+                  'Unable to connect to the server. Please check your internet connection.';
+              }
+
+              Alert.alert('Account Deletion Failed', message);
+              return;
             }
+
+            Alert.alert(
+              'Deletion Request Submitted',
+              'Your account deletion request has been received. You can continue using your account while the request is pending. Once deletion is completed, your account will be disabled.'
+            );
           }
         }
       ]
@@ -60,7 +90,10 @@ export default function ProfileScreen({ navigation }) {
           style: 'destructive',
           onPress: async () => {
             await logout();
-            navigation.replace('Login');
+            navigation.getParent()?.reset({
+                index: 0,
+                routes: [{ name: 'Login' }],
+              });
           },
         },
       ]
@@ -307,24 +340,7 @@ export default function ProfileScreen({ navigation }) {
       </ScrollView>
 
       {/* Bottom Tab */}
-      {isFocused && <View style={[styles.bottomTab, { paddingBottom: Math.max(insets.bottom, 24) }]}>
-        <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('Home')}>
-          <Ionicons name="home-outline" size={25} color="#9CA3AF" />
-          <Text style={styles.tabLabel}>Home</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('Cart')}>
-          <Ionicons name="cart-outline" size={25} color="#9CA3AF" />
-          <Text style={styles.tabLabel}>Cart</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem} onPress={() => navigation.navigate('MyOrders')}>
-          <Ionicons name="receipt-outline" size={25} color="#9CA3AF" />
-          <Text style={styles.tabLabel}>Orders</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem}>
-          <Ionicons name="person" size={25} color="#1669ef" />
-          <Text style={styles.tabLabelActive}>Profile</Text>
-        </TouchableOpacity>
-      </View>}
+
 
     </View>
   );

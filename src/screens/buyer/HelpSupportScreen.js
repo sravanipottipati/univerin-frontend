@@ -202,19 +202,19 @@ export default function HelpSupportScreen({ navigation }) {
       </ScrollView>
       {/* Bottom Tab */}
       <View style={{ flexDirection: 'row', backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#F0F0F0', paddingBottom: 20, paddingTop: 10 }}>
-        <TouchableOpacity style={{ flex: 1, alignItems: 'center' }} onPress={() => navigation.navigate('Home')}>
+        <TouchableOpacity style={{ flex: 1, alignItems: 'center' }} onPress={() => navigation.navigate('BuyerTabs', { screen: 'Home' })}>
           <Ionicons name="home-outline" size={25} color="#9CA3AF" />
           <Text style={{ fontSize: 11, color: '#9CA3AF' }}>Home</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={{ flex: 1, alignItems: 'center' }} onPress={() => navigation.navigate('Cart')}>
+        <TouchableOpacity style={{ flex: 1, alignItems: 'center' }} onPress={() => navigation.navigate('BuyerTabs', { screen: 'Cart' })}>
           <Ionicons name="cart-outline" size={25} color="#9CA3AF" />
           <Text style={{ fontSize: 11, color: '#9CA3AF' }}>Cart</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={{ flex: 1, alignItems: 'center' }} onPress={() => navigation.navigate('MyOrders')}>
+        <TouchableOpacity style={{ flex: 1, alignItems: 'center' }} onPress={() => navigation.navigate('BuyerTabs', { screen: 'MyOrders' })}>
           <Ionicons name="receipt-outline" size={25} color="#9CA3AF" />
           <Text style={{ fontSize: 11, color: '#9CA3AF' }}>Orders</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={{ flex: 1, alignItems: 'center' }} onPress={() => navigation.navigate('Profile')}>
+        <TouchableOpacity style={{ flex: 1, alignItems: 'center' }} onPress={() => navigation.navigate('BuyerTabs', { screen: 'Profile' })}>
           <Ionicons name="person-outline" size={25} color="#9CA3AF" />
           <Text style={{ fontSize: 11, color: '#9CA3AF' }}>Profile</Text>
         </TouchableOpacity>
