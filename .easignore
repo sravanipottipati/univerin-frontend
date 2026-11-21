@@ -52,3 +52,9 @@ yarn-error.*
 *.swo
 *~
 .DS_Store
+
+# Local Android builds and development backups
+*.apk
+*.aab
+*.backup*
+*.bak*
