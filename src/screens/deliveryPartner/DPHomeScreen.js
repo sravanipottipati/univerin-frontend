@@ -131,6 +131,29 @@ export default function DPHomeScreen({ navigation }) {
   );
 
   const startLocationTracking = async () => {
+    const consented = await new Promise((resolve) => {
+      Alert.alert(
+        'Background Location Access',
+        'UNIVERIN collects location data when you are Online as a delivery partner, including when the app is closed or not in use. This helps match you with nearby delivery orders and supports delivery tracking. Location tracking is intended to stop when you go Offline or log out.',
+        [
+          {
+            text: 'Not Now',
+            style: 'cancel',
+            onPress: () => resolve(false),
+          },
+          {
+            text: 'Continue',
+            onPress: () => resolve(true),
+          },
+        ],
+        {
+          cancelable: false,
+        }
+      );
+    });
+
+    if (!consented) return false;
+
     const fg = await Location.requestForegroundPermissionsAsync();
     if (fg.status !== 'granted') {
       Alert.alert('Permission needed', 'Location access is required to go online');
@@ -167,6 +190,7 @@ export default function DPHomeScreen({ navigation }) {
 
   const handleToggle = async (value) => {
     setToggling(true);
+    let trackingStoppedForOffline = false;
     try {
       if (value) {
         const started = await startLocationTracking();
@@ -194,21 +218,21 @@ export default function DPHomeScreen({ navigation }) {
         );
       }
 
+      // Stop GPS before changing backend status to Offline.
+      // Never report Offline while tracking is still running.
+      if (!value) {
+        await stopLocationTracking();
+        trackingStoppedForOffline = true;
+        setIsOnline(false);
+      }
+
       await client.post(
         '/dp/duty/toggle/',
         { is_online: value },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setIsOnline(value);
 
-      // Stop tracking only after the backend confirms Offline.
-      if (!value) {
-        try {
-          await stopLocationTracking();
-        } catch (stopError) {
-          console.warn('Offline confirmed, but GPS tracking could not stop:', stopError.message);
-        }
-      }
+      setIsOnline(value);
     } catch (e) {
       if (value) {
         try {
@@ -218,7 +242,17 @@ export default function DPHomeScreen({ navigation }) {
         }
       }
       console.warn('Delivery partner status update failed:', e.message);
-      Alert.alert('Error', 'Failed to update status. Please try again.');
+      if (!value && trackingStoppedForOffline) {
+        Alert.alert(
+          'GPS stopped, server update failed',
+          'Location tracking has stopped, but the server may still show you Online. Please retry switching Offline when connected.'
+        );
+      } else {
+        Alert.alert(
+          'Error',
+          'Failed to update status. Please try again.'
+        );
+      }
     } finally {
       setToggling(false);
     }
@@ -235,12 +269,23 @@ export default function DPHomeScreen({ navigation }) {
             await stopLocationTracking();
           } catch (error) {
             console.warn('Could not stop location tracking during logout:', error);
+            Alert.alert(
+              'Unable to logout',
+              'Location tracking could not be stopped. Please try again.'
+            );
+            return;
           }
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'Login' }],
-          });
-          await logout();
+
+          try {
+            await logout();
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'Login' }],
+            });
+          } catch (error) {
+            console.warn('Logout failed:', error);
+            Alert.alert('Error', 'Logout failed. Please try again.');
+          }
         },
       },
     ]);

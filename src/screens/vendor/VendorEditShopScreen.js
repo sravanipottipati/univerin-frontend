@@ -47,9 +47,7 @@ export default function VendorEditShopScreen({ navigation, route }) {
   const [bannerImage, setBannerImage]   = useState(null);
 
   const pickBannerImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') { Alert.alert('Permission needed', 'Please allow access to photos'); return; }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.7 });
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7 });
     if (!result.canceled) setBannerImage(result.assets[0]);
   };
   const [openTime, setOpenTime]         = useState(shop?.open_time || '9:00 AM');

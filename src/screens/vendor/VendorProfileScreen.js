@@ -41,7 +41,15 @@ export default function VendorProfileScreen({ navigation }) {
           style: 'destructive',
           onPress: async () => {
             try {
-              await client.post('/users/delete-account-request/');
+              const response = await client.post('/users/delete-account-request/');
+
+              if (response.data?.created === false) {
+                Alert.alert(
+                  'Deletion Request Already Pending',
+                  'You already have an active account deletion request. You can continue using your account while it is pending.'
+                );
+                return;
+              }
               Alert.alert('Request Submitted', 'Your account deletion request has been received. You can continue using your account while it is pending. Your request will be reviewed, and some records may need to be retained for legal or operational reasons.');
             } catch (e) {
               Alert.alert('Error', 'Failed to submit request. Please email contact@univerin.in');

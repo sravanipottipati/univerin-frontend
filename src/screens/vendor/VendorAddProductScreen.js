@@ -171,9 +171,6 @@ export default function VendorAddProductScreen({ navigation, route }) {
       if (source === 'camera') {
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (status !== 'granted') { Alert.alert('Permission needed', 'Camera permission required'); return; }
-      } else {
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== 'granted') { Alert.alert('Permission needed', 'Gallery permission required'); return; }
       }
       const result = source === 'camera'
         ? await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1,1], quality: 0.7 })

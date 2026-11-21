@@ -40,6 +40,19 @@ export default function ProfileScreen({ navigation }) {
             try {
               const response = await client.post('/users/delete-account-request/');
               console.log('[ACCOUNT DELETE] API succeeded:', response.status);
+
+              if (response.data?.created === false) {
+                Alert.alert(
+                  'Deletion Request Already Pending',
+                  'You already have an active account deletion request. Your account will remain accessible until the request is processed.'
+                );
+                return;
+              }
+
+              Alert.alert(
+                'Deletion Request Submitted',
+                'Your account deletion request has been received. You can continue using your account while the request is pending. Once deletion is completed, your account will be disabled.'
+              );
             } catch (e) {
               console.error('[ACCOUNT DELETE] API failed:', {
                 status: e.response?.status ?? null,
@@ -69,10 +82,6 @@ export default function ProfileScreen({ navigation }) {
               return;
             }
 
-            Alert.alert(
-              'Deletion Request Submitted',
-              'Your account deletion request has been received. You can continue using your account while the request is pending. Once deletion is completed, your account will be disabled.'
-            );
           }
         }
       ]
@@ -123,12 +132,6 @@ export default function ProfileScreen({ navigation }) {
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (status !== 'granted') {
           Alert.alert('Permission needed', 'Camera permission is required');
-          return;
-        }
-      } else {
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== 'granted') {
-          Alert.alert('Permission needed', 'Gallery permission is required');
           return;
         }
       }

@@ -117,13 +117,10 @@ export default function VendorEditProductScreen({ navigation, route }) {
       if (source === 'camera') {
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (status !== 'granted') { Alert.alert('Permission needed', 'Camera permission required'); return; }
-      } else {
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== 'granted') { Alert.alert('Permission needed', 'Gallery permission required'); return; }
       }
       const result = source === 'camera'
         ? await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1,1], quality: 0.7 })
-        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1,1], quality: 0.7 });
+        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1,1], quality: 0.7 });
       if (!result.canceled) setImage(result.assets[0]);
     } catch (err) { Alert.alert('Error', 'Could not pick image'); }
   };

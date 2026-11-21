@@ -91,7 +91,7 @@ export default function TownSelectionScreen({ navigation }) {
         address: detected.address,
         source: detected.source || 'manual',
       };
-      globalStore.hasCustomLocation = detected.source === 'manual';
+      globalStore.hasCustomLocation = (detected.source || 'manual') === 'manual';
       globalStore.lastPickedLocation = {
         lat: detected.lat,
         lng: detected.lng,
@@ -115,7 +115,7 @@ export default function TownSelectionScreen({ navigation }) {
         address: detected.address,
         source: detected.source || 'manual',
       };
-      globalStore.hasCustomLocation = detected.source === 'manual';
+      globalStore.hasCustomLocation = (detected.source || 'manual') === 'manual';
       globalStore.lastPickedLocation = {
         lat: detected.lat,
         lng: detected.lng,

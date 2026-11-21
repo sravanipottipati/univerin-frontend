@@ -405,8 +405,17 @@ export default function HomeScreen({ navigation, route }) {
         globalStore.hasCustomLocation = isManual;
         setLocationDenied(false);
         // Save persistently so Checkout can use it as a fallback address
-        globalStore.lastPickedLocation = { lat: loc.lat, lng: loc.lng, address: loc.address };
-        AsyncStorage.setItem('lastPickedLocation', JSON.stringify({ lat: loc.lat, lng: loc.lng, address: loc.address }));
+        const savedLocation = {
+          lat: loc.lat,
+          lng: loc.lng,
+          address: loc.address,
+          source: loc.source,
+        };
+        globalStore.lastPickedLocation = savedLocation;
+        AsyncStorage.setItem(
+          'lastPickedLocation',
+          JSON.stringify(savedLocation)
+        );
         setTown(shortAddress);
         setLoading(true);
         lastTownRef.current = `${loc.lat},${loc.lng}`;

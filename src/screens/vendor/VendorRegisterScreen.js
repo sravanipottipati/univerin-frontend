@@ -187,8 +187,6 @@ export default function VendorRegisterScreen({ navigation }) {
   // ── Submit ──
   const pickFssaiCert = async () => {
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') { Alert.alert('Permission required', 'Please allow access to photos'); return; }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsEditing: false,
